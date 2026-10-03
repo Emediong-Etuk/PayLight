@@ -38,3 +38,6 @@
 - Worker built: listener, fulfiller (request_id persisted before the single pay call; requery backoff 10s→10m; NEEDS_REVIEW on persistent unknown, never auto-refund), settler, refunder, cashback keeper, reconciler (at `safe` head), float/gas monitor with auto-pause, Telegram alerts, health endpoint.
 - End-to-end on local Anvil (real gateway/router, mock USD₮0/TapeOut, MockProvider, Postgres): 7/7 scenarios pass.
 - Found and fixed during e2e: viem caches getBlockNumber for ~4s, so the listener now reads the head uncached.
+- Web app built: API routes (discos, meter verify, quote, orders, SIWE, stats, VTpass webhook, gasless relay, admin) and pages (/, /pay, /receipt, /history, /light, /transparency, /help, /admin). Mobile-first; light and dark mode.
+- Full stack verified locally over HTTP (SIWE, quote, approve+pay, gasless relay, settlement, owner-only token). Details in TEST_REPORT.md.
+- Not done yet: Railway deployment, live VTpass, mainnet deploy, demo script, WalletConnect (injected-only for now).

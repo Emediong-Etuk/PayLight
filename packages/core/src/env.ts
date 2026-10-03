@@ -23,7 +23,7 @@ const schema = z.object({
   DATABASE_URL: z.string().optional(),
   TOKEN_ENCRYPTION_KEY: z.string().optional(), // 32 bytes, hex or base64
   QUOTE_TTL_SECONDS: z.coerce.number().int().min(30).max(600).default(120),
-  MAX_ORDER_NGN: z.coerce.number().int().default(40_000),
+  MAX_ORDER_NGN: z.coerce.number().int().default(39_000),
   DAILY_WALLET_CAP_NGN: z.coerce.number().int().default(80_000),
   FLOAT_MIN_NGN: z.coerce.number().int().default(5_000),
   MIN_OPERATOR_OKB_WEI: z.coerce.bigint().default(5_000_000_000_000_000n), // 0.005 OKB

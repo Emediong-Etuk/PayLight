@@ -34,7 +34,7 @@ async function main() {
   log.info("worker starting", { gateway, router, provider: ctx.provider.name, confirmations: ctx.confirmations });
 
   const port = Number(process.env.PORT ?? 8080);
-  createServer((req, res) => {
+  const server = createServer((req, res) => {
     if (req.url?.startsWith("/health")) {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true, provider: ctx.provider.name, jobs: heartbeats }));
@@ -44,8 +44,14 @@ async function main() {
   }).listen(port, () => log.info("health server", { port }));
 
   const abort = new AbortController();
-  process.on("SIGTERM", () => abort.abort());
-  process.on("SIGINT", () => abort.abort());
+  const shutdown = () => {
+    log.info("worker shutting down");
+    abort.abort();
+    server.close();
+    setTimeout(() => process.exit(0), 15_000).unref(); // hard stop if a job hangs
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
   await startJobs(
     [
       { name: "listener", everyMs: 2_000, run: () => runListener(ctx) },
@@ -59,6 +65,8 @@ async function main() {
     ],
     abort.signal,
   );
+  log.info("worker stopped");
+  process.exit(0);
 }
 
 main().catch((e) => {

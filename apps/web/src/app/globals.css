@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* PayLight design tokens. Light by default, dark via prefers-color-scheme. */
+:root {
+  --bg: #fffdf7;
+  --surface: #ffffff;
+  --surface-2: #f6f2e7;
+  --text: #17140f;
+  --muted: #5c564b;
+  --border: #e7e0cf;
+  --brand: #f5b301; /* "light" yellow */
+  --brand-ink: #1b1400;
+  --accent: #0e7a4f; /* naira green */
+  --danger: #b42318;
+  --ok: #067647;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0e0b;
+    --surface: #18160f;
+    --surface-2: #221f16;
+    --text: #f6f1e4;
+    --muted: #b3ab98;
+    --border: #322d20;
+    --brand: #ffc933;
+    --brand-ink: #1b1400;
+    --accent: #3ecf8e;
+    --danger: #f97066;
+    --ok: #47cd89;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html, body { background: var(--bg); color: var(--text); }
+body { -webkit-tap-highlight-color: transparent; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 1.25rem; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 3.25rem; padding: 0 1.25rem; border-radius: 1rem; font-weight: 700; font-size: 1.05rem; }
+.btn-primary { background: var(--brand); color: var(--brand-ink); }
+.btn-primary:disabled { opacity: .5; }
+.btn-ghost { border: 1px solid var(--border); background: var(--surface); }
+.input { width: 100%; min-height: 3.25rem; padding: 0 1rem; border-radius: 1rem; border: 1px solid var(--border); background: var(--surface); font-size: 1.1rem; }
+.input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }

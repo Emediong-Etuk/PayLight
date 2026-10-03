@@ -32,6 +32,7 @@ contract PayLightGatewayTest is Fixture {
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
     /// @dev Largest base amount whose tier-0 total (base + 1% fee, rounded up) is exactly MAX_ORDER (30e6).
     uint128 internal constant MAX_BASE_TIER0 = 29_702_970;
+    bytes32 internal constant RECEIPT = keccak256("vtpass-receipt");
 
     address internal carol = makeAddr("carol");
     address internal relayer = makeAddr("relayer");
@@ -147,9 +148,8 @@ contract PayLightGatewayTest is Fixture {
         view
         returns (PayLightGateway.PermitSig memory p)
     {
-        bytes32 structHash = keccak256(
-            abi.encode(PERMIT_TYPEHASH, owner, spender, value, ERC20Permit(token).nonces(owner), deadline)
-        );
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, ERC20Permit(token).nonces(owner), deadline));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", ERC20Permit(token).DOMAIN_SEPARATOR(), structHash));
         (p.v, p.r, p.s) = vm.sign(pk, digest);
         p.deadline = deadline;
@@ -466,7 +466,9 @@ contract PayLightGatewayTest is Fixture {
         bytes memory sig1 = _sign(q1);
         _approveAs(bob, address(gateway), _total(q1));
         vm.expectEmit(true, true, true, true, address(gateway));
-        emit PayLightGateway.OrderPaid(q1.orderId, bob, 10_050_000, 50_000, 1, 1, uint64(block.timestamp) + REFUND_TIMEOUT);
+        emit PayLightGateway.OrderPaid(
+            q1.orderId, bob, 10_050_000, 50_000, 1, 1, uint64(block.timestamp) + REFUND_TIMEOUT
+        );
         vm.prank(bob);
         gateway.pay(q1, sig1);
         assertEq(gateway.getOrder(q1.orderId).tier, 1);
@@ -1033,13 +1035,11 @@ contract PayLightGatewayTest is Fixture {
     function test_payWithPermit_insufficientAllowance_reverts() public {
         PayLightGateway.Quote memory q = _quote(alice, 10e6, 0);
         bytes memory sig = _sign(q);
-        bytes memory err = abi.encodeWithSelector(
-            IERC20Errors.ERC20InsufficientAllowance.selector, address(gateway), 0, _total(q)
-        );
+        bytes memory err =
+            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, address(gateway), 0, _total(q));
 
         // permit for one unit less than the order total: the gateway's permit call fails, no allowance results
-        PayLightGateway.PermitSig memory pShort =
-            _permitSig(alicePk, alice, _total(q) - 1, block.timestamp + 1 hours);
+        PayLightGateway.PermitSig memory pShort = _permitSig(alicePk, alice, _total(q) - 1, block.timestamp + 1 hours);
         vm.prank(alice);
         vm.expectRevert(err);
         gateway.payWithPermit(q, sig, pShort);
@@ -1137,7 +1137,14 @@ contract PayLightGatewayTest is Fixture {
 
         // authorization to a different payee
         a = _authSigFull(
-            address(usdt0), alicePk, alice, relayer, _total(q), block.timestamp - 1, block.timestamp + 1 hours, q.orderId
+            address(usdt0),
+            alicePk,
+            alice,
+            relayer,
+            _total(q),
+            block.timestamp - 1,
+            block.timestamp + 1 hours,
+            q.orderId
         );
         vm.prank(relayer);
         vm.expectRevert(MockUSDT0.InvalidAuthorization.selector);
@@ -1160,9 +1167,7 @@ contract PayLightGatewayTest is Fixture {
         vm.expectRevert(MockUSDT0.AuthorizationNotYetValid.selector);
         gateway.payWithAuthorization(q, sig, a);
 
-        a = _authSigFull(
-            address(usdt0), alicePk, alice, address(gateway), _total(q), 0, block.timestamp, q.orderId
-        );
+        a = _authSigFull(address(usdt0), alicePk, alice, address(gateway), _total(q), 0, block.timestamp, q.orderId);
         vm.prank(relayer);
         vm.expectRevert(MockUSDT0.AuthorizationExpired.selector);
         gateway.payWithAuthorization(q, sig, a);
@@ -1258,7 +1263,14 @@ contract PayLightGatewayTest is Fixture {
 
         // payWithAuthorization
         PayLightGateway.AuthorizationSig memory a = _authSigFull(
-            address(fot), alicePk, alice, address(gw), _total(q), block.timestamp - 1, block.timestamp + 1 hours, q.orderId
+            address(fot),
+            alicePk,
+            alice,
+            address(gw),
+            _total(q),
+            block.timestamp - 1,
+            block.timestamp + 1 hours,
+            q.orderId
         );
         vm.prank(relayer);
         vm.expectRevert(PayLightGateway.TransferMismatch.selector);
@@ -1348,9 +1360,9 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q = _quote(alice, 1e6, 0);
         _pay(q);
         vm.expectEmit(true, true, true, true, address(gateway));
-        emit PayLightGateway.OrderFulfilled(q.orderId, bytes32("r"), 0, false);
+        emit PayLightGateway.OrderFulfilled(q.orderId, RECEIPT, 0, false);
         vm.prank(operator);
-        gateway.markFulfilled(q.orderId, bytes32("r"));
+        gateway.markFulfilled(q.orderId, RECEIPT);
         assertFalse(gateway.getOrder(q.orderId).cashbackCredited);
         (address payer,,) = router.credits(q.orderId);
         assertEq(payer, address(0));
@@ -1362,9 +1374,9 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q = _quote(alice, 10e6, 8);
         _pay(q);
         vm.expectEmit(true, true, true, true, address(gateway));
-        emit PayLightGateway.OrderFulfilled(q.orderId, bytes32("r"), 8, false);
+        emit PayLightGateway.OrderFulfilled(q.orderId, RECEIPT, 8, false);
         vm.prank(operator);
-        gateway.markFulfilled(q.orderId, bytes32("r"));
+        gateway.markFulfilled(q.orderId, RECEIPT);
         assertFalse(gateway.getOrder(q.orderId).cashbackCredited);
         assertEq(usdt0.balanceOf(treasury), _total(q));
 
@@ -1400,9 +1412,9 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q = _quote(alice, 10e6, 3);
         _pay(q);
         vm.expectEmit(true, true, true, true, address(gateway));
-        emit PayLightGateway.OrderFulfilled(q.orderId, bytes32("r"), 3, false);
+        emit PayLightGateway.OrderFulfilled(q.orderId, RECEIPT, 3, false);
         vm.prank(operator);
-        gateway.markFulfilled(q.orderId, bytes32("r"));
+        gateway.markFulfilled(q.orderId, RECEIPT);
         _assertStatus(q.orderId, PayLightGateway.Status.Fulfilled);
         assertFalse(gateway.getOrder(q.orderId).cashbackCredited);
         assertEq(usdt0.balanceOf(treasury), _total(q));
@@ -1438,9 +1450,9 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q = _quote(alice, 10e6, 2);
         _pay(q);
         vm.expectEmit(true, true, true, true, address(gateway));
-        emit PayLightGateway.OrderFulfilled(q.orderId, bytes32("r"), 2, false);
+        emit PayLightGateway.OrderFulfilled(q.orderId, RECEIPT, 2, false);
         vm.prank(operator);
-        gateway.markFulfilled(q.orderId, bytes32("r"));
+        gateway.markFulfilled(q.orderId, RECEIPT);
 
         vm.prank(admin);
         gateway.setCashbackRouter(address(router));
@@ -1460,7 +1472,7 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q = _quote(alice, 10e6, 3);
         _pay(q);
         vm.prank(operator);
-        gateway.markFulfilled{gas: 1_000_000}(q.orderId, bytes32("r"));
+        gateway.markFulfilled{gas: 1_000_000}(q.orderId, RECEIPT);
         _assertStatus(q.orderId, PayLightGateway.Status.Fulfilled);
         assertFalse(gateway.getOrder(q.orderId).cashbackCredited);
         assertEq(usdt0.balanceOf(treasury), _total(q));
@@ -1476,7 +1488,7 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q = _quote(alice, 10e6, 3);
         _pay(q);
         vm.prank(operator);
-        gateway.markFulfilled(q.orderId, bytes32("r"));
+        gateway.markFulfilled(q.orderId, RECEIPT);
         _assertStatus(q.orderId, PayLightGateway.Status.Fulfilled);
         assertFalse(gateway.getOrder(q.orderId).cashbackCredited);
         assertEq(usdt0.balanceOf(treasury), _total(q));
@@ -1678,7 +1690,8 @@ contract PayLightGatewayTest is Fixture {
         uint256 t0 = block.timestamp;
         PayLightGateway.Quote memory q = _quote(alice, 1e6, 0);
         _pay(q);
-        uint64 snap = uint64(t0) + REFUND_TIMEOUT;
+        uint64 snap = gateway.getOrder(q.orderId).refundableAt;
+        assertEq(snap, t0 + REFUND_TIMEOUT);
         bytes memory early = abi.encodeWithSelector(PayLightGateway.RefundTooEarly.selector, snap);
 
         // shortening the timeout does not make the existing order refundable earlier
@@ -1779,7 +1792,9 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q2 = _quote(alice, 10e6, 1);
         q2.tier = 2;
         q2.fee = gateway.previewFee(10e6, 2);
-        _expectPayRevert(q2, _sign(q2), abi.encodeWithSelector(PayLightGateway.TierChanged.selector, uint8(2), uint8(0)));
+        _expectPayRevert(
+            q2, _sign(q2), abi.encodeWithSelector(PayLightGateway.TierChanged.selector, uint8(2), uint8(0))
+        );
 
         // settlement and refunds are unaffected
         _fulfil(q.orderId);
@@ -1891,7 +1906,9 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q2 = _quote(bob, 10e6, 0);
         q2.tier = 2;
         q2.fee = gateway.previewFee(10e6, 2);
-        _expectPayRevert(q2, _sign(q2), abi.encodeWithSelector(PayLightGateway.TierChanged.selector, uint8(2), uint8(0)));
+        _expectPayRevert(
+            q2, _sign(q2), abi.encodeWithSelector(PayLightGateway.TierChanged.selector, uint8(2), uint8(0))
+        );
 
         // re-enable
         processor.setMode(MockProcessor.Mode.Normal);
@@ -1940,6 +1957,13 @@ contract PayLightGatewayTest is Fixture {
         _settleOrdersOn(gw, bob, 3); // r = 1 -> tier 1 even when balances read 0
         assertEq(gw.computeTier(bob), 1, "calibration: heavy eval fits in the 300k cap");
 
+        // sensitivity check: an eval that needs more than the cap is starved and visibly degrades to tier 0
+        PayLightGateway gwTooHeavy = _gatewayWith(address(usdt0), address(new GwProcessorStub(address(bt), 300_000)), 1);
+        bt.setBalance(bob, 0, 500);
+        assertEq(gwTooHeavy.computeTier(bob), 0, "starved eval -> fallback");
+        assertEq(gw.computeTier(bob), 2, "same holdings, eval within cap -> tier 2");
+        bt.setBalance(bob, 0, 0);
+
         bt.setMode(GwBadTransistors.Mode.GasBomb);
         assertEq(gw.computeTier(bob), 1, "balances fail -> held 0, r still 1");
 
@@ -1954,6 +1978,8 @@ contract PayLightGatewayTest is Fixture {
                 ++ok;
             } catch (bytes memory err) {
                 if (err.length > 0) {
+                    // selector extraction: truncation to the first 4 bytes is intended
+                    // forge-lint: disable-next-line(unsafe-typecast)
                     assertEq(bytes4(err), PayLightGateway.InsufficientGasForTier.selector);
                     ++guarded;
                 }
@@ -2437,7 +2463,11 @@ contract PayLightGatewayTest is Fixture {
         });
         bytes32 domain = keccak256(
             abi.encode(
-                DOMAIN_TYPEHASH, keccak256(bytes("PayLightGateway")), keccak256(bytes("1")), block.chainid, address(gateway)
+                DOMAIN_TYPEHASH,
+                keccak256(bytes("PayLightGateway")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(gateway)
             )
         );
         assertEq(gateway.domainSeparator(), domain);
@@ -2468,11 +2498,66 @@ contract PayLightGatewayTest is Fixture {
         assertEq(extensions.length, 0);
     }
 
+    /// @dev Independent cross-check against forge's own EIP-712 encoder (typed-data JSON, as a wallet would sign).
+    function test_quoteDigest_matchesForgeTypedDataEncoder() public view {
+        PayLightGateway.Quote memory q = PayLightGateway.Quote({
+            orderId: keccak256("typed-data"),
+            payer: bob,
+            baseAmount: 4_200_000,
+            fee: 21_000,
+            tier: 1,
+            cashbackUnits: 50,
+            expiry: 1_760_000_100
+        });
+        string memory types = string.concat(
+            '{"types":{"EIP712Domain":[{"name":"name","type":"string"},{"name":"version","type":"string"},',
+            '{"name":"chainId","type":"uint256"},{"name":"verifyingContract","type":"address"}],',
+            '"Quote":[{"name":"orderId","type":"bytes32"},{"name":"payer","type":"address"},',
+            '{"name":"baseAmount","type":"uint128"},{"name":"fee","type":"uint128"},{"name":"tier","type":"uint8"},',
+            '{"name":"cashbackUnits","type":"uint32"},{"name":"expiry","type":"uint64"}]},"primaryType":"Quote",'
+        );
+        string memory domain = string.concat(
+            '"domain":{"name":"PayLightGateway","version":"1","chainId":',
+            vm.toString(block.chainid),
+            ',"verifyingContract":"',
+            vm.toString(address(gateway)),
+            '"},'
+        );
+        string memory message = string.concat(
+            '"message":{"orderId":"',
+            vm.toString(q.orderId),
+            '","payer":"',
+            vm.toString(q.payer),
+            '","baseAmount":',
+            vm.toString(uint256(q.baseAmount)),
+            ',"fee":',
+            vm.toString(uint256(q.fee)),
+            ',"tier":',
+            vm.toString(uint256(q.tier)),
+            ',"cashbackUnits":',
+            vm.toString(uint256(q.cashbackUnits)),
+            ',"expiry":',
+            vm.toString(uint256(q.expiry)),
+            "}}"
+        );
+        assertEq(gateway.quoteDigest(q), vm.eip712HashTypedData(string.concat(types, domain, message)));
+        assertEq(
+            vm.eip712HashType(
+                "Quote(bytes32 orderId,address payer,uint128 baseAmount,uint128 fee,uint8 tier,uint32 cashbackUnits,uint64 expiry)"
+            ),
+            gateway.QUOTE_TYPEHASH()
+        );
+    }
+
     function test_quoteDigest_manualSignaturePays() public {
         PayLightGateway.Quote memory q = _quote(alice, 2e6, 1);
         bytes32 domain = keccak256(
             abi.encode(
-                DOMAIN_TYPEHASH, keccak256(bytes("PayLightGateway")), keccak256(bytes("1")), block.chainid, address(gateway)
+                DOMAIN_TYPEHASH,
+                keccak256(bytes("PayLightGateway")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(gateway)
             )
         );
         bytes32 structHash = keccak256(
@@ -2480,8 +2565,7 @@ contract PayLightGatewayTest is Fixture {
                 QUOTE_TYPEHASH_EXPECTED, q.orderId, q.payer, q.baseAmount, q.fee, q.tier, q.cashbackUnits, q.expiry
             )
         );
-        (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(signerPk, keccak256(abi.encodePacked("\x19\x01", domain, structHash)));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, keccak256(abi.encodePacked("\x19\x01", domain, structHash)));
         _payWithSig(q, abi.encodePacked(r, s, v));
         _assertStatus(q.orderId, PayLightGateway.Status.Paid);
     }

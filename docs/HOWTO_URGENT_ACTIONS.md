@@ -2,7 +2,7 @@
 
 _Researched 2026-10-03 by a 4-researcher workflow._
 - The **VTpass** section was independently verified, and its corrections are applied below.
-- The **funding**, **wallet** and **treasury** sections were researched but their verification pass was cut off by a usage limit. Treat them as "likely": every step cites first-party pages, but nobody re-checked them.
+- The **funding**, **wallet** and **treasury** sections were verified later the same day, and their corrections are applied below too.
 - Items marked ⚠️ are the ones people most often miss.
 
 ## 1. VTpass
@@ -27,21 +27,38 @@ _Researched 2026-10-03 by a 4-researcher workflow._
 - **Commission:** the API column at https://www.vtpass.com/commissions. Ikeja and PHED pay **0% on MD meters**; AEDC is capped at ₦1,300 and Ikeja at ₦1,500.
 - **No published turnaround** exists for live provisioning. We'll make sure the full demo also works on the **sandbox** (meter `1111111111111` returns a token) as a fallback.
 
-## 2. Getting OKB and USD₮0 onto X Layer (likely; not independently re-verified)
+## 2. Getting OKB and USD₮0 onto X Layer (verified)
 
 - ⚠️ **Withdrawing USDT from OKX:** pick the network labelled **"X Layer (USDT0)"**. In your wallet the token must show as **USD₮0** (with ₮), contract `0x779Ded0c9e1022225f8E0630b35a9b54bE713736`. Plain **"USDT"** on X Layer (`0x1E4a…D41d`) is the legacy token being phased out, and PayLight doesn't accept it.
-- **OKB:** in OKX go to Assets → Withdraw → OKB → on-chain → network **X Layer** (may be labelled "X Layer (OKB)") → paste your 0x address. Read the fee and minimum on the screen. An ERC-20 OKB withdrawal from another exchange lands on Ethereum, **not** X Layer.
+- **OKB:** OKB-USDT is a spot market on OKX. USDT bought via P2P lands in your **Funding** account, so first move it with Assets → **Transfer** (Funding → Trading), then buy OKB.
+- **Withdrawing OKB:** Assets → Withdraw → OKB → *New destination* (on-chain, not "OKX recipients") → paste your 0x address → network **X Layer** (may be labelled "X Layer (OKB)").
+  - ⚠️ On the website you enter the **address first** and OKX auto-picks a network. A 0x address also matches Ethereum and Arbitrum, so **check X Layer is selected** before Next.
+  - Read the fee and minimum on the screen.
+  - An ERC-20 OKB withdrawal from another exchange lands on Ethereum, **not** X Layer.
 - **Send a small test first,** check it on the explorer, then send the rest. Your address page is `https://web3.okx.com/explorer/x-layer/evm/address/<YOUR_ADDR>`.
-- **Withdrawal locks:** changing your password, phone or 2FA blocks withdrawals for 24h. The "New address withdrawal lock" also holds newly added addresses for 24h. USDT bought via P2P can carry a T+N hold.
+- ⚠️ **P2P "T+N" holds:** some P2P merchants trigger a 3, 7 or 15-day lock on withdrawing what you buy. **T+7 or T+15 would run past the deadline.** OKX warns you before you place the order; if you see a T+N warning, back out and pick another merchant. NGN P2P is live on OKX (≈₦1,352/USDT on 2026-10-03).
+- **Other withdrawal locks:**
+  - Changing your password, phone or 2FA blocks withdrawals for 24h.
+  - The "New address withdrawal lock" holds newly added addresses for 24h.
+  - An address OKX flags as high-risk is restricted for 48h.
+  - Set up authenticator + email 2FA now (SMS can't be used once all three are linked).
 - **If OKX doesn't work for you:** Gate lists OKB withdrawals on X Layer, but has no USD₮0 on X Layer. Bitget, KuCoin and HTX don't support X Layer for these assets.
-- **Cost check:** OKB ≈ 120 USDT (OKX ticker, 2026-10-03), so the ≈2.1 OKB budget is about $250. **2.0 OKB of that is the first cashback reserve tranche**, and it comes back to you as creator revenue. To cut the up-front cash, the first tranche can be 5,000 transistors (≈0.5 OKB) instead of 20,000.
+- **Cost check:** OKB ≈ 120 USDT and USDT ≈ ₦1,352 (2026-10-03), so 1 OKB ≈ ₦162k.
+  - The processor launch itself needs only **≈0.01 OKB**.
+  - The first cashback reserve batch is the big item, and it comes back to you as creator revenue: 20,000 transistors ≈ 2.0 OKB (≈₦325k), or **5,000 ≈ 0.5 OKB (≈₦81k), which is recommended**.
+  - The operator gas float is 0.05 OKB.
 - **Read-only balance checks** (no keys needed):
   `cast balance <ADDR> --ether --rpc-url https://rpc.xlayer.tech` (shows OKB)
   `cast erc20 balance 0x779Ded0c9e1022225f8E0630b35a9b54bE713736 <ADDR> --rpc-url https://rpc.xlayer.tech` (6 decimals)
 
-## 3. Deployment / admin wallet (likely)
+## 3. Deployment / admin wallet (verified)
 
-- **Install Foundry:** `curl -L https://getfoundry.sh/install | bash`, then add `export PATH="$PATH:$HOME/.foundry/bin"` to `~/.zshrc` or `~/.bashrc`, then run `foundryup`. On Windows, use **WSL2**.
+- ⚠️ **Only use a Ledger if you already own a genuine one you set up yourself.** Ledger delivery to Nigeria takes 4–6 weeks, so don't order one for this. Never use a second-hand or "pre-set-up" device. Otherwise use the keystore option below; it's fine for the hackathon.
+- **Install Foundry:**
+  1. `curl -L https://getfoundry.sh/install | bash`
+  2. Add `export PATH="$PATH:$HOME/.foundry/bin"` to `~/.zshrc` or `~/.bashrc`.
+  3. Run `foundryup`. It installs the latest stable (≈1.8.x, about 120 MB, so use Wi-Fi).
+  - On Windows, use **WSL2**. If it fails with 0x80370102, enable virtualization in BIOS.
 - **Ledger:**
   - Install the **Ethereum** app. It also signs for X Layer (chain 196).
   - Get your address with `cast wallet address --ledger`, which uses the Ledger Live path index 0.
@@ -51,16 +68,24 @@ _Researched 2026-10-03 by a 4-researcher workflow._
   - In WSL2, the Ledger needs **usbipd-win** to pass the USB device through.
 - **Keystore (no Ledger):**
   1. `mkdir -p ~/.foundry/keystores`
-  2. `cast wallet new ~/.foundry/keystores paylight-admin` (the key is never shown)
+  2. `cast wallet new ~/.foundry/keystores paylight-admin` (the key is never shown; the password prompt shows nothing as you type)
   3. **Immediately** run `cast wallet address --account paylight-admin` to confirm the password works (it's asked only once).
-  - There's no seed phrase, so back up the keystore file and its password offline.
+  - ⚠️ **Run the create command only once.** Older Foundry silently overwrites an existing key of the same name. Newer versions ask `[y/N]`; answer **N**.
+  - There's no seed phrase. Back up `~/.foundry/keystores/paylight-admin` and its password offline. On WSL the file is at `\\wsl$\Ubuntu\home\<you>\.foundry\keystores`, and resetting Ubuntu deletes it.
+- ⚠️ **Always pass `--rpc-url https://rpc.xlayer.tech` explicitly.** Without it, cast defaults to localhost. Confirm every real transaction on the OKX explorer.
 - **Never** use `--private-key` or `--unsafe-password` on the command line (they end up in shell history), and never run `cast wallet new` without a folder (it prints the key).
 
-## 4. Treasury (likely)
+## 4. Treasury (verified)
 
-- **Recommended:** a second Ledger account, from `cast wallet address --ledger --mnemonic-index 1`. It's free and keeps fee income separate from the published deployer wallet.
-- **Safe** does officially support X Layer (https://app.safe.global/welcome?chain=xlayer). Use "Pay now" (costs under a cent).
-  - Strip the `xlayer:` prefix when copying addresses.
+- ⚠️ **The treasury receives the WHOLE amount of every settled order** (electricity cost + fee), not just fees. It's your operating account: sweep it regularly (e.g. daily in the pilot) to your OKX USDT deposit address on the **X Layer** network, sell for naira, and top up VTpass. Don't treat the balance as profit.
+- **Without a Ledger (recommended for you):** a second keystore. Run `cast wallet new ~/.foundry/keystores paylight-treasury`, then confirm it with `cast wallet address --account paylight-treasury`. Back it up like the admin keystore.
+- **With a Ledger:** use account index 1, from `cast wallet address --ledger --mnemonic-index 1`. You'll need `--mnemonic-index 1` on **every** command that sends from it.
+- **Sending from the treasury:**
+  - Command: `cast erc20 transfer 0x779Ded0c9e1022225f8E0630b35a9b54bE713736 <TO> <AMOUNT> --account paylight-treasury --rpc-url https://rpc.xlayer.tech`
+  - AMOUNT is in raw units: 25 USD₮0 = `25000000`.
+  - Give the treasury about 0.001 OKB of gas first; that covers hundreds of sweeps.
+- If you haven't decided yet, the gateway can be deployed with treasury = the admin address and moved later with `setTreasury`.
+- **Safe** does officially support X Layer (https://app.safe.global/welcome?chain=xlayer). Use "Pay now" (costs under a cent). It's an option for after the hackathon.
   - Keep the gateway **admin** on your Ledger, not a Safe, until after the deadline, so pause and refunds stay fast.
 - **OKX Wallet:** use a seed-phrase wallet → **Add account**. Copy the **0x** form (switch away from the XKO-prefixed form).
 - The treasury needs a little OKB later in order to *send* funds out, but not to receive them.

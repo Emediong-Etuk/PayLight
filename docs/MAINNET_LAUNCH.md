@@ -15,14 +15,14 @@ The parameters are the approved values from [`PROCESSOR_PARAMS.md`](PROCESSOR_PA
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 
-export RPC=https://rpc.xlayer.tech
+export RPC=https://rpc.xlayer.tech   # always mainnet; never point this at a local fork
 export FACTORY=0x1f09daefa827f02cbb40967cc91b259763760761
 
 # Pick ONE signer and set SIGNER accordingly:
 #   Ledger (Ethereum app open on the device):
 export SIGNER="--ledger"
-#   …or an encrypted Foundry keystore you created with `cast wallet import paylight-deployer --interactive`:
-# export SIGNER="--account paylight-deployer"
+#   …or the encrypted Foundry keystore you created with `cast wallet new ~/.foundry/keystores paylight-admin`:
+# export SIGNER="--account paylight-admin"
 
 export DEPLOYER=0xYOUR_DEPLOYMENT_WALLET   # the public address only
 

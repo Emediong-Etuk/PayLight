@@ -27,6 +27,10 @@ Any Ubuntu 24.04 VPS with **2 GB RAM or more** (the web build needs it) and abou
 | Contabo | roughly €5/mo | Lots of RAM for the price; slower provisioning |
 | Oracle Cloud Always Free | ARM VM, $0 | Free but signup is often rejected, and capacity is limited |
 
+**No international card?** Two options (checked 2026-10-03):
+- **Pay in Naira by bank transfer:** [Lineserve](https://www.lineserve.ng/linux-vps/ubuntu). Servers are in Lagos. The 2 GB plan is ₦21,950/mo plus 7.5% VAT, with a dedicated IPv4 included.
+- **Pay with USDT:** [Cloudzy](https://cloudzy.com/tether-vps). Their 2 GB plan was $7.48/mo on promo, with London and Frankfurt regions and a dedicated IPv4. Check which USDT networks they accept before you send anything.
+
 When you create the server:
 - **Image:** Ubuntu 24.04.
 - **Auth:** add your **SSH key**, not a password. If you don't have a key, run `ssh-keygen -t ed25519` on your laptop and paste in the contents of `~/.ssh/id_ed25519.pub`.

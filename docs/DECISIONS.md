@@ -121,6 +121,8 @@ Neither the TapeOut factory nor USD₮0 exists on testnet (chainId 1952); `getCo
 
 VTpass live may require **IP whitelisting** (error 027). Vercel serverless egress IPs aren't static. **Proposal:** host both the Next.js app and the worker on one platform with a static outbound IP (Railway with static IP, or Fly.io with an egress IP), or have Vercel call the worker's internal HTTP endpoint for verify and quote. Greg picks the hosting. Default if he doesn't choose: Railway for web, worker and Postgres.
 
+**Update 2026-10-03:** Greg's Railway subscription expired, so hosting moved to **a single VPS running Docker Compose** (Caddy + web + worker + Postgres). It has one fixed public IPv4 for VTpass whitelisting. See `docs/VPS_DEPLOY.md`; `RAILWAY.md` stays as an optional alternative.
+
 ## D-11 · Event indexing within RPC limits · ACCEPTED (technical)
 
 The public RPC caps `eth_getLogs` at **100 blocks** and requests at 100/s per IP. The listener will:

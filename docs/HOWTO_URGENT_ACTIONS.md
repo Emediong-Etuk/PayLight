@@ -17,7 +17,7 @@ _Researched 2026-10-03 by a 4-researcher workflow._
   - "PayLight, prepaid electricity vending via API";
   - the 12 serviceIDs;
   - 1–3 successful sandbox request_ids;
-  - our **static server IP** for whitelisting (I'll send it once Railway is up);
+  - our **static server IP** for whitelisting (your VPS's public IPv4, see `docs/VPS_DEPLOY.md` step 7);
   - the callback URL (comes later);
   - the 9 Oct deadline.
   - **Never** send the secret key, BVN or NIN.

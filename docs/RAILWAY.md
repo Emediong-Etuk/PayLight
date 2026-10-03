@@ -1,5 +1,7 @@
 # Railway setup (web + worker + Postgres)
 
+> **Optional alternative.** The primary hosting path is now a single VPS: see `VPS_DEPLOY.md`.
+
 _Written 2026-10-03 from Railway's current docs (docs.railway.com: static-outbound-ips, monorepo, config-as-code, variables, pricing). The repo already contains `apps/web/railway.json` and `apps/worker/railway.json` with the build, start, migration and health-check commands. A clean `pnpm install --frozen-lockfile` + build was tested._
 
 ## What you'll end up with

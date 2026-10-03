@@ -52,6 +52,10 @@ pnpm worker          # terminal 1
 pnpm dev             # terminal 2 → http://localhost:3000
 ```
 
+## Deploy
+
+One VPS with Docker Compose (Caddy HTTPS + web + worker + Postgres): see [`docs/VPS_DEPLOY.md`](docs/VPS_DEPLOY.md). Files: `Dockerfile`, `deploy/`. Railway is an alternative: [`docs/RAILWAY.md`](docs/RAILWAY.md).
+
 ## Tests
 
 ```bash

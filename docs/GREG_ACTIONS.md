@@ -34,7 +34,7 @@ Ordered by urgency. The deadline is **Fri 2026-10-09 04:00 UTC (05:00 WAT)**. Ai
 ## 🟠 Sun 4 – Mon 5
 
 7. **Mainnet signing:** processor `createCPU`, minting 7 NAND and tape-out of the FeeTier circuit. I'll print exact commands; you run them or type "yes, run it".
-8. **Hosting:** create a Railway (or Fly.io) project with a **static outbound IP** and managed Postgres. Add a domain if you want one. Give me deploy access or an API token through env, never in chat.
+8. **Hosting:** rent a small VPS (2 GB RAM, Ubuntu 24.04) and follow `docs/VPS_DEPLOY.md`. Send me the server's **public IPv4** and the domain (or the sslip.io name). Keys go into `deploy/.env` on the server, never in chat. (Railway is an optional alternative: `docs/RAILWAY.md`.)
 9. **Alerts:** create a Telegram bot with @BotFather and a private alert chat. Put the bot token and chat ID in env.
 10. **RPC (optional but recommended):** a free dedicated X Layer RPC (QuickNode, Alchemy, ZAN, Chainstack or BlockPI). The public one limits log queries to 100 blocks.
 11. **OKLink API key**, if contract verification asks for one.

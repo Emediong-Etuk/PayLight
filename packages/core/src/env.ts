@@ -34,7 +34,9 @@ const schema = z.object({
 
 export type Env = z.infer<typeof schema>;
 let cached: Env | undefined;
-export const env = (): Env => (cached ??= schema.parse(process.env));
+/** Blank values (e.g. `GATEWAY_ADDRESS=` in a Docker env file) count as unset, so defaults and optionals apply. */
+const nonBlank = (e: NodeJS.ProcessEnv) => Object.fromEntries(Object.entries(e).filter(([, v]) => v !== undefined && v.trim() !== ""));
+export const env = (): Env => (cached ??= schema.parse(nonBlank(process.env)));
 /** For tests. */
 export const resetEnv = () => {
   cached = undefined;

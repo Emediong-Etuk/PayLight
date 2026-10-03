@@ -41,3 +41,9 @@
 - Web app built: API routes (discos, meter verify, quote, orders, SIWE, stats, VTpass webhook, gasless relay, admin) and pages (/, /pay, /receipt, /history, /light, /transparency, /help, /admin). Mobile-first; light and dark mode.
 - Full stack verified locally over HTTP (SIWE, quote, approve+pay, gasless relay, settlement, owner-only token). Details in TEST_REPORT.md.
 - Not done yet: Railway deployment, live VTpass, mainnet deploy, demo script, WalletConnect (injected-only for now).
+
+## 2026-10-03 (Sat), night — Hosting moved to a VPS
+
+- Greg's Railway subscription expired. Added a single-VPS deployment: `Dockerfile` (one image for web and worker), `deploy/docker-compose.yml` (Postgres, migrate, web, worker, Caddy with automatic HTTPS, log rotation), `deploy/.env.example` and `docs/VPS_DEPLOY.md`.
+- Tested locally: image builds; `compose up` applied migrations; web healthy behind Caddy HTTPS (`/api/config` 200, `/pay` 200, `/admin` 401 → 200 with basic auth, HTTP→HTTPS redirect). Without `GATEWAY_ADDRESS` the worker exits and restarts, as designed.
+- Env loader now treats blank values (`KEY=` in Docker env files) as unset.

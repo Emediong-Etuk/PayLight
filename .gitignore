@@ -20,3 +20,4 @@ packages/contracts/cache/
 apps/web/.next/
 .local/
 packages/contracts/broadcast/LocalDev.s.sol/
+deploy/.env

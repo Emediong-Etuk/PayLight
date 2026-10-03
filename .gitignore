@@ -19,3 +19,4 @@ packages/contracts/cache/
 *.tsbuildinfo
 apps/web/.next/
 .local/
+packages/contracts/broadcast/LocalDev.s.sol/

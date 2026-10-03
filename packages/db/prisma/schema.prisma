@@ -1,0 +1,154 @@
+// PayLight database. Postgres is the single source of truth for the order state machine (BUILD_BRIEF §6.1).
+// Privacy: meter tokens are stored AES-256-GCM encrypted; meter numbers are needed to vend and are never logged in full.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  QUOTED
+  EXPIRED
+  PAID
+  MISMATCH
+  PROVIDER_PENDING
+  DELIVERED
+  SETTLED
+  PROVIDER_FAILED
+  REFUNDING
+  REFUNDED
+  NEEDS_REVIEW
+}
+
+/// A signed quote. orderId is the bytes32 used on-chain.
+model Quote {
+  orderId         String   @id
+  payer           String
+  serviceID       String
+  meterNumber     String
+  meterType       String   @default("prepaid")
+  customerName    String
+  customerAddress String?
+  phone           String?
+  amountNgn       Int
+  rateKobo        BigInt
+  baseAmount      BigInt
+  fee             BigInt
+  tier            Int
+  cashbackUnits   Int
+  expiry          DateTime
+  signature       String
+  gateway         String
+  chainId         Int
+  createdAt       DateTime @default(now())
+  order           Order?
+
+  @@index([payer, createdAt])
+}
+
+model Order {
+  orderId             String      @id
+  quote               Quote       @relation(fields: [orderId], references: [orderId])
+  status              OrderStatus @default(QUOTED)
+  payer               String
+  amount              BigInt
+  fee                 BigInt
+  tier                Int
+  cashbackUnits       Int
+  txHashPaid          String?
+  blockPaid           BigInt?
+  paidAt              DateTime?
+  refundableAt        DateTime?
+  /// Exactly one VTpass request_id per order, persisted BEFORE calling /pay (never re-pay; requery instead).
+  providerRequestId   String?     @unique
+  providerTxId        String?
+  providerStatus      String?
+  providerCode        String?
+  meterTokenEncrypted String?
+  units               String?
+  providerRaw         Json?
+  requeryCount        Int         @default(0)
+  nextActionAt        DateTime?
+  receiptHash         String?
+  txHashSettled       String?
+  txHashRefund        String?
+  refundedByOperator  Boolean?
+  lastError           String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  events              OrderEvent[]
+
+  @@index([status, nextActionAt])
+  @@index([payer, createdAt])
+}
+
+model OrderEvent {
+  id        BigInt       @id @default(autoincrement())
+  orderId   String
+  order     Order        @relation(fields: [orderId], references: [orderId])
+  from      OrderStatus?
+  to        OrderStatus
+  reason    String
+  createdAt DateTime     @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+/// One row per CashbackPaid event (router), for /transparency.
+model CashbackPayout {
+  orderId   String   @id
+  payer     String
+  units     Int
+  txHash    String
+  block     BigInt
+  createdAt DateTime @default(now())
+}
+
+/// Idempotency for processed chain logs (blockNumber, logIndex) and per-stream cursors.
+model ChainLog {
+  id        String   @id // `${txHash}:${logIndex}`
+  block     BigInt
+  event     String
+  createdAt DateTime @default(now())
+
+  @@index([block])
+}
+
+model ChainCursor {
+  name      String   @id
+  lastBlock BigInt
+  updatedAt DateTime @updatedAt
+}
+
+/// Audited key/value config (rate, spread, quotes paused, float thresholds).
+model Config {
+  key       String   @id
+  value     String
+  updatedBy String
+  updatedAt DateTime @updatedAt
+}
+
+model AdminAudit {
+  id        BigInt   @id @default(autoincrement())
+  actor     String
+  action    String
+  payload   Json
+  createdAt DateTime @default(now())
+}
+
+model SiweNonce {
+  nonce     String   @id
+  expiresAt DateTime
+  usedAt    DateTime?
+}
+
+/// Simple fixed-window rate limiting (per wallet / per IP) without Redis.
+model RateLimit {
+  key       String   @id
+  count     Int
+  windowEnd DateTime
+}

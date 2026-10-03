@@ -35,3 +35,6 @@
 ## 2026-10-03 (Sat), night — Checkpoint 1 approved
 
 - Greg approved Checkpoint 1. Starting Phase 2: backend (shared package, DB, VTpass provider, quote engine, worker, API routes).
+- Worker built: listener, fulfiller (request_id persisted before the single pay call; requery backoff 10s→10m; NEEDS_REVIEW on persistent unknown, never auto-refund), settler, refunder, cashback keeper, reconciler (at `safe` head), float/gas monitor with auto-pause, Telegram alerts, health endpoint.
+- End-to-end on local Anvil (real gateway/router, mock USD₮0/TapeOut, MockProvider, Postgres): 7/7 scenarios pass.
+- Found and fixed during e2e: viem caches getBlockNumber for ~4s, so the listener now reads the head uncached.

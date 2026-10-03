@@ -6,6 +6,7 @@ export const CONFIG_KEYS = {
   spreadBps: "spread_bps", // e.g. "150" = 1.5%; user pays (1 + spread) worth of USD₮0
   quotesPaused: "quotes_paused", // "true" | "false"
   rateUpdatedAt: "rate_updated_at",
+  autoPausedReason: "quotes_auto_paused_reason", // set by the worker's float/gas monitor; empty = not paused
 } as const;
 
 export async function getConfig(key: string): Promise<string | null> {
@@ -32,7 +33,7 @@ export async function getPricing(): Promise<PricingConfig> {
   return {
     rateKobo: BigInt(m.get(CONFIG_KEYS.rateKobo) ?? "0"),
     spreadBps: Number(m.get(CONFIG_KEYS.spreadBps) ?? "0"),
-    quotesPaused: (m.get(CONFIG_KEYS.quotesPaused) ?? "false") === "true",
+    quotesPaused: (m.get(CONFIG_KEYS.quotesPaused) ?? "false") === "true" || (m.get(CONFIG_KEYS.autoPausedReason) ?? "") !== "",
     rateUpdatedAt: m.get(CONFIG_KEYS.rateUpdatedAt) ? new Date(m.get(CONFIG_KEYS.rateUpdatedAt)!) : null,
   };
 }

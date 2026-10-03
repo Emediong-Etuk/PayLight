@@ -18,3 +18,4 @@ packages/contracts/cache/
 .turbo/
 *.tsbuildinfo
 apps/web/.next/
+.local/

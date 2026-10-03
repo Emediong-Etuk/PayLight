@@ -11,6 +11,11 @@
     "migrate:dev": "prisma migrate dev",
     "typecheck": "tsc -p tsconfig.json"
   },
-  "dependencies": { "@prisma/client": "^6.17.0" },
-  "devDependencies": { "prisma": "^6.17.0", "typescript": "^5.9.3" }
+  "dependencies": {
+    "@prisma/client": "^6.17.0",
+    "prisma": "^6.19.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }

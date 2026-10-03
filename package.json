@@ -1,0 +1,22 @@
+{
+  "name": "paylight",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @paylight/web dev",
+    "worker": "pnpm --filter @paylight/worker start",
+    "test": "pnpm -r --if-present test",
+    "test:contracts": "cd packages/contracts && forge test",
+    "test:fork": "cd packages/contracts && FORK=1 forge test --match-path test/fork/PayLightFork.t.sol",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "abis": "node scripts/export-abis.mjs",
+    "db:generate": "pnpm --filter @paylight/db generate",
+    "db:migrate": "pnpm --filter @paylight/db migrate",
+    "deploy:mainnet": "node scripts/print-deploy-command.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^22.18.0"
+  }
+}

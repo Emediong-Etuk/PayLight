@@ -31,3 +31,7 @@
 - Security review: 2 real bugs from test authors, 18 reviewer findings. 9 fixed in code with regression tests; the rest documented in `docs/SECURITY.md`.
 - Deploy scripts: `script/Deploy.s.sol` (gateway + router, writes `deployments/<chainId>.json`) and `script/LaunchProcessor.s.sol` (processor + FeeTier tape-out), both exercised on the fork.
 - **→ CHECKPOINT 1: waiting for Greg.**
+
+## 2026-10-03 (Sat), night — Checkpoint 1 approved
+
+- Greg approved Checkpoint 1. Starting Phase 2: backend (shared package, DB, VTpass provider, quote engine, worker, API routes).

@@ -15,3 +15,6 @@ coverage/
 .DS_Store
 packages/contracts/out/
 packages/contracts/cache/
+.turbo/
+*.tsbuildinfo
+apps/web/.next/

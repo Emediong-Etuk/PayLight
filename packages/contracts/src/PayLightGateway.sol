@@ -44,6 +44,9 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
     uint16 public constant MAX_FEE_BPS = 200;
     /// @notice Hard upper bound on transistor cashback per order.
     uint32 public constant MAX_CASHBACK_UNITS = 50;
+    /// @notice Each cashback unit must be backed by at least this much base amount (0.25 USD₮0), so cashback is tied
+    ///         to real money paid even if the quote signer is compromised.
+    uint128 public constant MIN_BASE_PER_CASHBACK_UNIT = 250_000;
     /// @notice Hard bounds for the pilot caps (USD₮0 has 6 decimals).
     uint128 public constant MAX_ORDER_HARD_CAP = 5_000e6;
     uint128 public constant MAX_DAILY_HARD_CAP = 100_000e6;
@@ -55,8 +58,8 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
     uint256 internal constant NAND_ID = 0;
     uint256 internal constant LATCH_ID = 1;
     /// @dev Gas caps for calls into (upgradeable, third-party) TapeOut contracts.
-    uint256 public constant EVAL_GAS_LIMIT = 300_000;
-    uint256 public constant BALANCE_GAS_LIMIT = 100_000;
+    uint256 public constant EVAL_GAS_LIMIT = 150_000; // FeeTier eval measured ~63k on mainnet fork
+    uint256 public constant BALANCE_GAS_LIMIT = 50_000;
 
     // ─────────────────────────────────────────────────────────────── types
 
@@ -207,7 +210,8 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
     error DailyCapExceeded();
     error TooMuchCashback();
     error NotPaid();
-    error NotPayer();
+    error CashbackNotBacked();
+    error SettlementWindowClosed(uint64 refundableAt);
     error RefundTooEarly(uint64 refundableAt);
     error TransferMismatch();
     error InsufficientGasForTier();
@@ -287,9 +291,12 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
     /// @notice Settle a delivered order: send its USD₮0 to the treasury and credit transistor cashback.
     /// @param receiptHash keccak256 of the bill provider's transaction id (never the meter token).
     /// @dev Works while paused. A failing cashback router never blocks settlement (see retryCashbackCredit).
+    ///      Settlement is only possible up to the order's refund deadline; after it, the order can only be refunded, so
+    ///      the operator can never race or override a payer's self-refund.
     function markFulfilled(bytes32 orderId, bytes32 receiptHash) external nonReentrant onlyRole(OPERATOR_ROLE) {
         Order storage o = _orders[orderId];
         if (o.status != Status.Paid) revert NotPaid();
+        if (block.timestamp > o.refundableAt) revert SettlementWindowClosed(o.refundableAt);
         o.status = Status.Fulfilled;
         uint128 amount = o.amount;
         totalPending -= amount;
@@ -316,12 +323,13 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
         _refund(orderId, true);
     }
 
-    /// @notice Payer self-refund of the full amount once the order's refund deadline has passed. Works while paused and
-    ///         without any PayLight backend: this is the trust-minimising guarantee.
+    /// @notice Self-refund of the full amount to the payer once the order's refund deadline has passed. Works while paused
+    ///         and without any PayLight backend: this is the trust-minimising guarantee.
+    /// @dev Callable by anyone (funds can only go to the payer), so a gasless payer with no OKB can have a friend or any
+    ///      relayer trigger it.
     function claimRefund(bytes32 orderId) external nonReentrant {
         Order storage o = _orders[orderId];
         if (o.status != Status.Paid) revert NotPaid();
-        if (msg.sender != o.payer) revert NotPayer();
         if (block.timestamp <= o.refundableAt) revert RefundTooEarly(o.refundableAt);
         _refund(orderId, false);
     }
@@ -352,7 +360,7 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
         // Ensure a TapeOut failure is genuine, not caused by the caller starving the call of gas (EIP-150 63/64).
         if (gasleft() < ((EVAL_GAS_LIMIT + 2 * BALANCE_GAS_LIMIT) * 64) / 63 + 20_000) revert InsufficientGasForTier();
 
-        uint256 held = _safeBalance(payer, NAND_ID) + _safeBalance(payer, LATCH_ID);
+        uint256 held = _heldTransistors(payer);
         uint8 input;
         if (held >= tier1Holding) input |= 1; // h1
         if (held >= tier2Holding) input |= 2; // h2
@@ -362,7 +370,7 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
 
     /// @notice The FeeTier circuit's input byte for `payer` (for transparency / debugging).
     function circuitInput(address payer) external view returns (uint8 input, uint256 held) {
-        held = _safeBalance(payer, NAND_ID) + _safeBalance(payer, LATCH_ID);
+        held = _heldTransistors(payer);
         if (held >= tier1Holding) input |= 1;
         if (held >= tier2Holding) input |= 2;
         if (settledOrders[payer] >= repeatOrders) input |= 4;
@@ -465,6 +473,7 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
         if (q.payer == address(0)) revert ZeroAddress();
         if (q.baseAmount == 0) revert ZeroAmount();
         if (q.cashbackUnits > MAX_CASHBACK_UNITS) revert TooMuchCashback();
+        if (uint256(q.cashbackUnits) * MIN_BASE_PER_CASHBACK_UNIT > q.baseAmount) revert CashbackNotBacked();
         if (q.tier >= TIER_COUNT) revert InvalidTier();
 
         uint128 expectedFee = previewFee(q.baseAmount, q.tier);
@@ -519,6 +528,8 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
         o.status = Status.Refunded;
         uint128 amount = o.amount;
         totalPending -= amount;
+        // A refunded order no longer counts toward its day's volume cap.
+        dailyVolume[o.paidAt / 1 days] -= amount;
         usdt0.safeTransfer(o.payer, amount);
         emit OrderRefunded(orderId, o.payer, amount, byOperator);
     }
@@ -526,11 +537,18 @@ contract PayLightGateway is AccessControl, Pausable, ReentrancyGuard, EIP712 {
     function _creditCashback(bytes32 orderId, Order storage o) internal returns (bool credited) {
         address router = cashbackRouter;
         uint32 units = o.cashbackUnits;
-        if (router == address(0) || units == 0) return false;
+        // Skip routers without code: a try/catch can't catch the caller-side extcodesize revert.
+        if (router == address(0) || units == 0 || router.code.length == 0) return false;
         try ICashbackRouter(router).credit(orderId, o.payer, units) {
             o.cashbackCredited = true;
             credited = true;
         } catch {}
+    }
+
+    /// @dev NAND + LATCH held by `account`, saturating so a misbehaving TapeOut can't make the sum overflow.
+    function _heldTransistors(address account) internal view returns (uint256) {
+        (bool ok, uint256 sum) = Math.tryAdd(_safeBalance(account, NAND_ID), _safeBalance(account, LATCH_ID));
+        return ok ? sum : type(uint256).max;
     }
 
     /// @dev ERC-1155 balance via a gas-capped, return-size-capped staticcall; 0 on any failure.

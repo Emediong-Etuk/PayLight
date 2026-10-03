@@ -33,6 +33,12 @@ contract PayLightFuzzTest is Fixture {
 
     /// @dev Largest baseAmount whose total (base + ceil fee) still fits under the current maxOrderAmount at `tier`
     ///      (0 if no base fits).
+    /// @dev Max cashback units a quote with `base` may carry (cap and 0.25 USD₮0 backing per unit).
+    function _maxUnits(uint128 base) internal pure returns (uint32) {
+        uint256 backed = uint256(base) / 250_000;
+        return uint32(backed < 50 ? backed : 50);
+    }
+
     function _maxBase(uint8 tier) internal view returns (uint128) {
         uint256 bps = gateway.tierFeeBps(tier);
         uint256 m = gateway.maxOrderAmount();
@@ -118,7 +124,7 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice previewFee == ceil(base * bps / 1e4) for every tier and every uint128 base.
     function testFuzz_previewFee_isCeil(uint128 base, uint8 tier) public view {
-        tier = uint8(bound(tier, 0, 2));
+        tier = uint8(_bound(tier, 0, 2));
         uint256 bps = gateway.tierFeeBps(tier);
         uint128 fee = gateway.previewFee(base, tier);
         assertEq(fee, _ceilFee(base, bps), "ceil fee");
@@ -131,9 +137,9 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice Admin can set any monotone tier table within MAX_FEE_BPS, and the ceil formula holds for it.
     function testFuzz_setTierFees_boundedAndCeil(uint16 b0, uint16 b1, uint16 b2, uint128 base) public {
-        b0 = uint16(bound(b0, 0, gateway.MAX_FEE_BPS()));
-        b1 = uint16(bound(b1, 0, b0));
-        b2 = uint16(bound(b2, 0, b1));
+        b0 = uint16(_bound(b0, 0, gateway.MAX_FEE_BPS()));
+        b1 = uint16(_bound(b1, 0, b0));
+        b2 = uint16(_bound(b2, 0, b1));
         vm.expectEmit(address(gateway));
         emit PayLightGateway.TierFeesUpdated(b0, b1, b2);
         vm.prank(admin);
@@ -155,7 +161,7 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice Any fee other than the exact ceil fee is rejected with FeeMismatch(quoted, expected).
     function testFuzz_feeMismatch_reverts(uint128 base, uint128 badFee) public {
-        base = uint128(bound(base, 1, _maxBase(0)));
+        base = uint128(_bound(base, 1, _maxBase(0)));
         PayLightGateway.Quote memory q = _quote(alice, base, 0);
         uint128 expected = q.fee;
         vm.assume(badFee != expected);
@@ -194,10 +200,10 @@ contract PayLightFuzzTest is Fixture {
         bool settle,
         bool pauseBeforeResolve
     ) public {
-        path = uint8(bound(path, 0, 2));
-        vm.warp(block.timestamp + bound(warpBy, 0, 10 * 365 days));
-        base = uint128(bound(base, 1, _maxBase(0)));
-        units = uint32(bound(units, 0, MAX_CB));
+        path = uint8(_bound(path, 0, 2));
+        vm.warp(block.timestamp + _bound(warpBy, 0, 10 * 365 days));
+        base = uint128(_bound(base, 1, _maxBase(0)));
+        units = uint32(_bound(units, 0, _maxUnits(base)));
         _topUp(100);
 
         PayLightGateway.Quote memory q = _quote(alice, base, units);
@@ -276,8 +282,8 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice At each tier, the largest base that fits pays; one more unit reverts OrderTooLarge (fuzzed cap).
     function testFuzz_maxOrderAmount_boundary(uint128 cap, uint8 tierSel) public {
-        tierSel = uint8(bound(tierSel, 0, 2));
-        cap = uint128(bound(cap, 1, gateway.MAX_ORDER_HARD_CAP()));
+        tierSel = uint8(_bound(tierSel, 0, 2));
+        cap = uint128(_bound(cap, 1, gateway.MAX_ORDER_HARD_CAP()));
         vm.startPrank(admin);
         gateway.setMaxOrderAmount(cap);
         gateway.setDailyVolumeCap(gateway.MAX_DAILY_HARD_CAP());
@@ -300,10 +306,10 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice Any base whose total exceeds maxOrderAmount reverts OrderTooLarge, at every tier.
     function testFuzz_pay_overMaxOrder_reverts(uint128 base, uint8 tierSel) public {
-        tierSel = uint8(bound(tierSel, 0, 2));
+        tierSel = uint8(_bound(tierSel, 0, 2));
         if (tierSel == 1) _giveTransistors(alice, TIER1_HOLDING);
         if (tierSel == 2) _giveTransistors(alice, TIER2_HOLDING);
-        base = uint128(bound(base, uint256(_maxBase(tierSel)) + 1, 1e30));
+        base = uint128(_bound(base, uint256(_maxBase(tierSel)) + 1, 1e30));
         PayLightGateway.Quote memory q = _quote(alice, base, 0);
         assertEq(q.tier, tierSel);
         assertGt(_total(q), MAX_ORDER);
@@ -322,7 +328,7 @@ contract PayLightFuzzTest is Fixture {
     /// @notice Random sequence of orders by two payers through random paths, each then settled, refunded, self-refunded
     ///         or left pending: USD₮0 is conserved and totalPending equals the sum of pending amounts.
     function testFuzz_manyOrders_conservation(uint256 seed, uint8 n) public {
-        n = uint8(bound(n, 1, 10));
+        n = uint8(_bound(n, 1, 10));
         _topUp(1_000);
         uint256 supply0 = usdt0.totalSupply();
         Acc memory acc;
@@ -353,8 +359,8 @@ contract PayLightFuzzTest is Fixture {
     function _randomOrderStep(uint256 r, Acc memory acc) internal {
         (address payer, uint256 pk) = r & 1 == 1 ? (bob, bobPk) : (alice, alicePk);
         uint8 tier = gateway.computeTier(payer);
-        uint128 base = uint128(bound(r >> 8, 1, _maxBase(tier)));
-        PayLightGateway.Quote memory q = _quote(payer, base, uint32(bound(r >> 136, 0, MAX_CB)));
+        uint128 base = uint128(_bound(r >> 8, 1, _maxBase(tier)));
+        PayLightGateway.Quote memory q = _quote(payer, base, uint32(_bound(r >> 136, 0, _maxUnits(base))));
         assertEq(q.fee, _ceilFee(base, gateway.tierFeeBps(tier)));
         _payVia(uint8((r >> 2) % 3), q, pk, false);
         uint128 amount = _total(q);
@@ -389,14 +395,14 @@ contract PayLightFuzzTest is Fixture {
         uint128 base1,
         uint128 base2
     ) public {
-        uint256 day = block.timestamp / 1 days + bound(dayOffset, 0, 3650);
-        vm.warp(day * 1 days + bound(secondOfDay, 0, 1 days - 1));
-        uint128 capV = uint128(bound(cap, 1, 3 * MAX_ORDER));
+        uint256 day = block.timestamp / 1 days + _bound(dayOffset, 0, 3650);
+        vm.warp(day * 1 days + _bound(secondOfDay, 0, 1 days - 1));
+        uint128 capV = uint128(_bound(cap, 1, 3 * MAX_ORDER));
         vm.prank(admin);
         gateway.setDailyVolumeCap(capV);
         uint128 mb = _maxBase(0);
-        base1 = uint128(bound(base1, 1, mb));
-        base2 = uint128(bound(base2, 1, mb));
+        base1 = uint128(_bound(base1, 1, mb));
+        base2 = uint128(_bound(base2, 1, mb));
 
         uint256 vol;
         PayLightGateway.Quote memory q1 = _quote(alice, base1, 0);
@@ -434,9 +440,9 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice Fill the cap at 23:59:59 on a random day; one more unit is rejected that second and accepted at 00:00:00.
     function testFuzz_dailyCap_rolloverBoundary(uint256 dayOffset, uint128 base) public {
-        uint256 day = block.timestamp / 1 days + bound(dayOffset, 1, 3650);
+        uint256 day = block.timestamp / 1 days + _bound(dayOffset, 1, 3650);
         vm.warp((day + 1) * 1 days - 1); // last second of `day`
-        base = uint128(bound(base, 1, _maxBase(0)));
+        base = uint128(_bound(base, 1, _maxBase(0)));
         PayLightGateway.Quote memory q1 = _quote(alice, base, 0);
         vm.prank(admin);
         gateway.setDailyVolumeCap(_total(q1)); // cap == exactly one order
@@ -462,9 +468,9 @@ contract PayLightFuzzTest is Fixture {
     function testFuzz_computeTier_matchesCircuit(uint256 holdings, uint256 latchPart, uint8 settled, uint128 base)
         public
     {
-        holdings = bound(holdings, 0, 1_000);
-        latchPart = bound(latchPart, 0, holdings);
-        settled = uint8(bound(settled, 0, 5));
+        holdings = _bound(holdings, 0, 1_000);
+        latchPart = _bound(latchPart, 0, holdings);
+        settled = uint8(_bound(settled, 0, 5));
 
         _settleOrders(carol, settled);
         if (holdings - latchPart > 0) _giveTransistors(carol, holdings - latchPart);
@@ -478,7 +484,7 @@ contract PayLightFuzzTest is Fixture {
         assertEq(held, holdings, "held = NAND + LATCH");
         assertEq(uint8(processor.eval(feeCircuitId, abi.encodePacked(input))[0]), expected, "raw circuit output");
 
-        base = uint128(bound(base, 1, _maxBase(expected)));
+        base = uint128(_bound(base, 1, _maxBase(expected)));
         PayLightGateway.Quote memory q = _quote(carol, base, 0);
         assertEq(q.tier, expected);
         assertEq(q.fee, _ceilFee(base, gateway.tierFeeBps(expected)));
@@ -490,11 +496,11 @@ contract PayLightFuzzTest is Fixture {
     function testFuzz_computeTier_fuzzedThresholds(uint128 t1, uint128 t2, uint32 r, uint256 holdings, uint8 settled)
         public
     {
-        t1 = uint128(bound(t1, 1, 1_000));
-        t2 = uint128(bound(t2, t1, 1_000));
-        r = uint32(bound(r, 1, 5));
-        holdings = bound(holdings, 0, 1_000);
-        settled = uint8(bound(settled, 0, 5));
+        t1 = uint128(_bound(t1, 1, 1_000));
+        t2 = uint128(_bound(t2, t1, 1_000));
+        r = uint32(_bound(r, 1, 5));
+        holdings = _bound(holdings, 0, 1_000);
+        settled = uint8(_bound(settled, 0, 5));
 
         vm.expectEmit(address(gateway));
         emit PayLightGateway.TierThresholdsUpdated(t1, t2, r);
@@ -512,12 +518,12 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice A quote whose tier differs from the on-chain tier reverts TierChanged(quoted, actual).
     function testFuzz_tierChanged_reverts(uint256 holdings, uint8 quotedTier, uint128 base) public {
-        holdings = bound(holdings, 0, 1_000);
+        holdings = _bound(holdings, 0, 1_000);
         if (holdings > 0) _giveTransistors(carol, holdings);
         uint8 actual = gateway.computeTier(carol);
-        quotedTier = uint8(bound(quotedTier, 0, 2));
+        quotedTier = uint8(_bound(quotedTier, 0, 2));
         vm.assume(quotedTier != actual);
-        base = uint128(bound(base, 1, _maxBase(quotedTier)));
+        base = uint128(_bound(base, 1, _maxBase(quotedTier)));
 
         PayLightGateway.Quote memory q = _quote(carol, base, 0);
         q.tier = quotedTier;
@@ -528,13 +534,13 @@ contract PayLightFuzzTest is Fixture {
     /// @notice Whatever a broken / upgraded TapeOut returns (revert, empty, malformed, tier 3, gas bomb, return bomb,
     ///         short return), the tier falls back to 0 (highest fee) and payments keep working.
     function testFuzz_tapeOutFailure_fallsBackToTier0(uint8 modeSel, uint256 holdings, uint128 base) public {
-        MockProcessor.Mode mode = MockProcessor.Mode(uint8(bound(modeSel, 1, 7)));
-        holdings = bound(holdings, 0, 1_000);
+        MockProcessor.Mode mode = MockProcessor.Mode(uint8(_bound(modeSel, 1, 7)));
+        holdings = _bound(holdings, 0, 1_000);
         if (holdings > 0) _giveTransistors(carol, holdings);
         processor.setMode(mode);
 
         assertEq(gateway.computeTier(carol), 0, "fallback tier 0");
-        base = uint128(bound(base, 1, _maxBase(0)));
+        base = uint128(_bound(base, 1, _maxBase(0)));
         PayLightGateway.Quote memory q = _quote(carol, base, 0);
         assertEq(q.tier, 0);
         assertEq(q.fee, _ceilFee(base, TIER0_BPS));
@@ -547,9 +553,10 @@ contract PayLightFuzzTest is Fixture {
     /// @notice cashbackUnits 0..50 are accepted, credited on settlement (if > 0) and distributed when the reserve
     ///         covers them, deferred otherwise; > 50 reverts TooMuchCashback.
     function testFuzz_cashbackUnits_creditAndDistribute(uint32 units, uint128 base, uint256 reserve) public {
-        units = uint32(bound(units, 0, 80));
-        base = uint128(bound(base, 1, _maxBase(0)));
-        reserve = bound(reserve, 0, 100);
+        units = uint32(_bound(units, 0, 80));
+        // within the cap, give the quote enough base to back its units (0.25 USD₮0 each)
+        base = uint128(_bound(base, units <= MAX_CB && units > 0 ? uint256(units) * 250_000 : 1, _maxBase(0)));
+        reserve = _bound(reserve, 0, 100);
 
         if (units > MAX_CB) {
             PayLightGateway.Quote memory bad = _quote(alice, base, units);
@@ -619,11 +626,11 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice A quote is usable up to and including its expiry second, never after (fuzzed warp up to 2 years).
     function testFuzz_quoteExpiry(uint256 startOffset, uint256 dt, uint128 base) public {
-        vm.warp(block.timestamp + bound(startOffset, 0, 5 * 365 days));
-        base = uint128(bound(base, 1, _maxBase(0)));
+        vm.warp(block.timestamp + _bound(startOffset, 0, 5 * 365 days));
+        base = uint128(_bound(base, 1, _maxBase(0)));
         PayLightGateway.Quote memory q = _quote(alice, base, 0);
         bytes memory sig = _sign(q);
-        dt = bound(dt, 0, 2 * 365 days);
+        dt = _bound(dt, 0, 2 * 365 days);
         vm.warp(block.timestamp + dt);
         vm.prank(alice);
         usdt0.approve(address(gateway), _total(q));
@@ -638,14 +645,14 @@ contract PayLightFuzzTest is Fixture {
     function testFuzz_claimRefund_timing(uint256 payAt, uint64 timeout, uint64 laterTimeout, uint256 dt, uint8 path)
         public
     {
-        vm.warp(block.timestamp + bound(payAt, 0, 10 * 365 days));
-        timeout = uint64(bound(timeout, gateway.MIN_REFUND_TIMEOUT(), gateway.MAX_REFUND_TIMEOUT()));
-        laterTimeout = uint64(bound(laterTimeout, gateway.MIN_REFUND_TIMEOUT(), gateway.MAX_REFUND_TIMEOUT()));
+        vm.warp(block.timestamp + _bound(payAt, 0, 10 * 365 days));
+        timeout = uint64(_bound(timeout, gateway.MIN_REFUND_TIMEOUT(), gateway.MAX_REFUND_TIMEOUT()));
+        laterTimeout = uint64(_bound(laterTimeout, gateway.MIN_REFUND_TIMEOUT(), gateway.MAX_REFUND_TIMEOUT()));
         vm.prank(admin);
         gateway.setRefundTimeout(timeout);
 
         PayLightGateway.Quote memory q = _quote(alice, 10e6, 3);
-        _payVia(uint8(bound(path, 0, 2)), q, alicePk, true);
+        _payVia(uint8(_bound(path, 0, 2)), q, alicePk, true);
         uint64 paidAt = uint64(block.timestamp);
         uint64 refundableAt = paidAt + timeout;
         assertEq(gateway.getOrder(q.orderId).refundableAt, refundableAt);
@@ -654,14 +661,11 @@ contract PayLightFuzzTest is Fixture {
         gateway.setRefundTimeout(laterTimeout); // must not move the existing order's deadline
         assertEq(gateway.getOrder(q.orderId).refundableAt, refundableAt, "snapshot");
 
-        dt = bound(dt, 0, 2 * uint256(timeout) + 1 days);
+        dt = _bound(dt, 0, 2 * uint256(timeout) + 1 days);
         vm.warp(paidAt + dt);
 
-        // a non-payer can never self-refund, early or late
-        vm.expectRevert(PayLightGateway.NotPayer.selector);
-        vm.prank(bob);
-        gateway.claimRefund(q.orderId);
-
+        // a non-payer may trigger the refund but never before the deadline, and never to themselves
+        uint256 b0 = usdt0.balanceOf(bob);
         uint256 a0 = usdt0.balanceOf(alice);
         if (dt <= timeout) {
             vm.expectRevert(abi.encodeWithSelector(PayLightGateway.RefundTooEarly.selector, refundableAt));
@@ -672,9 +676,10 @@ contract PayLightFuzzTest is Fixture {
         } else {
             vm.expectEmit(address(gateway));
             emit PayLightGateway.OrderRefunded(q.orderId, alice, _total(q), false);
-            vm.prank(alice);
+            vm.prank(bob); // triggered by a third party
             gateway.claimRefund(q.orderId);
             assertEq(usdt0.balanceOf(alice), a0 + _total(q), "payer +amount back");
+            assertEq(usdt0.balanceOf(bob), b0, "trigger gets nothing");
             assertEq(uint8(_status(q.orderId)), uint8(PayLightGateway.Status.Refunded));
             assertEq(gateway.totalPending(), 0);
             vm.expectRevert(PayLightGateway.NotPaid.selector);
@@ -685,8 +690,8 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice Exact boundary: at refundableAt + delta for delta in [-3, 3], the claim succeeds iff delta > 0.
     function testFuzz_claimRefund_aroundDeadline(uint256 payAt, uint64 timeout, int256 delta) public {
-        vm.warp(block.timestamp + bound(payAt, 0, 10 * 365 days));
-        timeout = uint64(bound(timeout, gateway.MIN_REFUND_TIMEOUT(), gateway.MAX_REFUND_TIMEOUT()));
+        vm.warp(block.timestamp + _bound(payAt, 0, 10 * 365 days));
+        timeout = uint64(_bound(timeout, gateway.MIN_REFUND_TIMEOUT(), gateway.MAX_REFUND_TIMEOUT()));
         vm.prank(admin);
         gateway.setRefundTimeout(timeout);
         PayLightGateway.Quote memory q = _quote(bob, 5e6, 0);
@@ -694,7 +699,7 @@ contract PayLightFuzzTest is Fixture {
         uint64 refundableAt = gateway.getOrder(q.orderId).refundableAt;
         assertEq(refundableAt, block.timestamp + timeout);
 
-        delta = bound(delta, -3, 3);
+        delta = _bound(delta, -3, 3);
         vm.warp(uint256(int256(uint256(refundableAt)) + delta));
         if (delta <= 0) {
             vm.expectRevert(abi.encodeWithSelector(PayLightGateway.RefundTooEarly.selector, refundableAt));
@@ -712,8 +717,8 @@ contract PayLightFuzzTest is Fixture {
         _pay(q);
         vm.prank(operator);
         gateway.pause();
-        processor.setMode(MockProcessor.Mode(uint8(bound(modeSel, 0, 7))));
-        vm.warp(block.timestamp + REFUND_TIMEOUT + 1 + bound(extra, 0, 5 * 365 days));
+        processor.setMode(MockProcessor.Mode(uint8(_bound(modeSel, 0, 7))));
+        vm.warp(block.timestamp + REFUND_TIMEOUT + 1 + _bound(extra, 0, 5 * 365 days));
         uint256 a0 = usdt0.balanceOf(alice);
         vm.prank(alice);
         gateway.claimRefund(q.orderId);
@@ -723,7 +728,7 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice New payments of any shape revert EnforcedPause while paused, on all three paths.
     function testFuzz_paused_blocksAllPayPaths(uint8 path, uint128 base) public {
-        base = uint128(bound(base, 1, _maxBase(0)));
+        base = uint128(_bound(base, 1, _maxBase(0)));
         PayLightGateway.Quote memory q = _quote(alice, base, 1);
         bytes memory sig = _sign(q);
         PayLightGateway.PermitSig memory p = _permitSig(alicePk, alice, _total(q), block.timestamp + 1 hours);
@@ -732,7 +737,7 @@ contract PayLightFuzzTest is Fixture {
         usdt0.approve(address(gateway), _total(q));
         vm.prank(admin);
         gateway.pause();
-        path = uint8(bound(path, 0, 2));
+        path = uint8(_bound(path, 0, 2));
         vm.expectRevert(Pausable.EnforcedPause.selector);
         if (path == 0) {
             vm.prank(alice);
@@ -750,9 +755,9 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice A quote signed by any key other than quoteSigner reverts InvalidSignature.
     function testFuzz_wrongSigner_reverts(uint256 pk, uint128 base) public {
-        pk = bound(pk, 1, SECP256K1_N - 1);
+        pk = _bound(pk, 1, SECP256K1_N - 1);
         vm.assume(pk != signerPk);
-        base = uint128(bound(base, 1, _maxBase(0)));
+        base = uint128(_bound(base, 1, _maxBase(0)));
         PayLightGateway.Quote memory q = _quote(alice, base, 0);
         bytes memory sig = _signWith(pk, q);
         vm.prank(alice);
@@ -765,10 +770,10 @@ contract PayLightFuzzTest is Fixture {
     /// @notice Changing any amount after signing (with a self-consistent fee) breaks the signature.
     function testFuzz_tamperedAmount_reverts(uint128 base, uint128 newBase, uint32 units, uint32 newUnits) public {
         uint128 mb = _maxBase(0);
-        base = uint128(bound(base, 1, mb));
-        newBase = uint128(bound(newBase, 1, mb));
-        units = uint32(bound(units, 0, MAX_CB));
-        newUnits = uint32(bound(newUnits, 0, MAX_CB));
+        base = uint128(_bound(base, 1, mb));
+        newBase = uint128(_bound(newBase, 1, mb));
+        units = uint32(_bound(units, 0, _maxUnits(base)));
+        newUnits = uint32(_bound(newUnits, 0, _maxUnits(newBase)));
         vm.assume(newBase != base || newUnits != units);
         PayLightGateway.Quote memory q = _quote(alice, base, units);
         bytes memory sig = _sign(q);
@@ -786,15 +791,15 @@ contract PayLightFuzzTest is Fixture {
 
     /// @notice rescueToken can take only the USD₮0 excess above totalPending.
     function testFuzz_rescueToken_onlyExcess(uint128 base, uint256 excess, uint256 ask) public {
-        base = uint128(bound(base, 1, _maxBase(0)));
-        excess = bound(excess, 0, 1_000e6);
+        base = uint128(_bound(base, 1, _maxBase(0)));
+        excess = _bound(excess, 0, 1_000e6);
         PayLightGateway.Quote memory q = _quote(alice, base, 0);
         _pay(q);
         if (excess > 0) {
             vm.prank(bob);
             usdt0.transfer(address(gateway), excess); // mistaken direct transfer
         }
-        ask = bound(ask, 0, 2_000e6);
+        ask = _bound(ask, 0, 2_000e6);
         address to = makeAddr("rescueTo");
         if (ask > excess) {
             vm.expectRevert(PayLightGateway.RescueExceedsExcess.selector);

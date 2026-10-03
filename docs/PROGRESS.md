@@ -24,3 +24,10 @@
 - The Phase 1 test/review workflow was cut off by a usage limit and re-launched. The contracts were unaffected.
 - IGNIX hasn't replied about the factory address. **Greg decided to proceed with `0x1f09…0761`** (verified on-chain; 272 processors; deployed by TapeOut's protocol wallet). Recorded as D-14.
 - Added `docs/HOWTO_URGENT_ACTIONS.md` (VTpass steps verified; wallet/funding/treasury steps being re-verified).
+
+## 2026-10-03 (Sat), late — Phase 1 contracts complete
+
+- Test suites written by 4 parallel agents and finished by the lead engineer: 317 tests, all passing, including 24 against real X Layer mainnet state on a fork.
+- Security review: 2 real bugs from test authors, 18 reviewer findings. 9 fixed in code with regression tests; the rest documented in `docs/SECURITY.md`.
+- Deploy scripts: `script/Deploy.s.sol` (gateway + router, writes `deployments/<chainId>.json`) and `script/LaunchProcessor.s.sol` (processor + FeeTier tape-out), both exercised on the fork.
+- **→ CHECKPOINT 1: waiting for Greg.**

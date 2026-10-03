@@ -223,8 +223,8 @@ contract PayLightGatewayTest is Fixture {
         assertEq(gateway.MIN_REFUND_TIMEOUT(), 1 hours);
         assertEq(gateway.MAX_REFUND_TIMEOUT(), 72 hours);
         assertEq(gateway.TIER_COUNT(), 3);
-        assertEq(gateway.EVAL_GAS_LIMIT(), 300_000);
-        assertEq(gateway.BALANCE_GAS_LIMIT(), 100_000);
+        assertEq(gateway.EVAL_GAS_LIMIT(), 150_000);
+        assertEq(gateway.BALANCE_GAS_LIMIT(), 50_000);
         assertTrue(gateway.supportsInterface(type(IAccessControl).interfaceId));
     }
 
@@ -620,12 +620,18 @@ contract PayLightGatewayTest is Fixture {
     }
 
     function test_pay_cashbackUnits_boundary() public {
-        PayLightGateway.Quote memory q = _quote(alice, 1e6, 51);
+        PayLightGateway.Quote memory q = _quote(alice, 13e6, 51);
         _expectPayRevert(q, _sign(q), PayLightGateway.TooMuchCashback.selector);
 
-        PayLightGateway.Quote memory ok = _quote(alice, 1e6, 50);
+        PayLightGateway.Quote memory ok = _quote(alice, 12_500_000, 50); // exactly 0.25 USD₮0 per unit
         _payWithSig(ok, _sign(ok));
         assertEq(gateway.getOrder(ok.orderId).cashbackUnits, 50);
+
+        // each unit must be backed by >= MIN_BASE_PER_CASHBACK_UNIT of base amount
+        PayLightGateway.Quote memory unbacked = _quote(alice, 2_999_999, 12);
+        _expectPayRevert(unbacked, _sign(unbacked), PayLightGateway.CashbackNotBacked.selector);
+        PayLightGateway.Quote memory backed = _quote(alice, 3_000_000, 12);
+        _payWithSig(backed, _sign(backed));
 
         PayLightGateway.Quote memory big = _quote(alice, 1e6, type(uint32).max);
         _expectPayRevert(big, _sign(big), PayLightGateway.TooMuchCashback.selector);
@@ -697,9 +703,12 @@ contract PayLightGatewayTest is Fixture {
         PayLightGateway.Quote memory q3 = _quote(alice, 1, 0); // 1 + 1 fee = 2 units over the cap
         _expectPayRevert(q3, _sign(q3), PayLightGateway.DailyCapExceeded.selector);
 
-        // a refund does not free up daily volume (gross volume is tracked)
+        // a refund releases its volume from the day it was paid
         vm.prank(operator);
         gateway.refund(q1.orderId);
+        assertEq(gateway.dailyVolume(day), 10_100_000, "refund released");
+        PayLightGateway.Quote memory q1b = _quote(alice, 10e6, 0);
+        _pay(q1b); // back at the cap
         _expectPayRevert(q3, _sign(q3), PayLightGateway.DailyCapExceeded.selector);
 
         // last second of the same UTC day: still capped
@@ -822,7 +831,7 @@ contract PayLightGatewayTest is Fixture {
     }
 
     function test_sig_tamperedUnits() public {
-        PayLightGateway.Quote memory q = _quote(alice, 1e6, 5);
+        PayLightGateway.Quote memory q = _quote(alice, 2e6, 5);
         bytes memory sig = _sign(q);
         q.cashbackUnits = 6;
         _expectPayRevert(q, sig, PayLightGateway.InvalidSignature.selector);
@@ -1635,15 +1644,24 @@ contract PayLightGatewayTest is Fixture {
 
     // ═════════════════════════════════════════════════════════════════════════ claimRefund (payer)
 
-    function test_claimRefund_notPayer() public {
-        PayLightGateway.Quote memory q = _quote(alice, 1e6, 0);
-        _pay(q);
-        vm.warp(block.timestamp + REFUND_TIMEOUT + 1);
-        address[3] memory callers = [bob, operator, admin];
+    /// @dev Anyone may trigger the self-refund after the deadline (so gasless payers need no OKB); funds go to the payer.
+    function test_claimRefund_anyoneCanTrigger_fundsGoToPayer() public {
+        address[3] memory callers = [bob, operator, makeAddr("stranger")];
         for (uint256 i; i < callers.length; ++i) {
+            PayLightGateway.Quote memory q = _quote(alice, 1e6, 0);
+            _pay(q);
             vm.prank(callers[i]);
-            vm.expectRevert(PayLightGateway.NotPayer.selector);
+            vm.expectRevert(
+                abi.encodeWithSelector(PayLightGateway.RefundTooEarly.selector, gateway.getOrder(q.orderId).refundableAt)
+            );
             gateway.claimRefund(q.orderId);
+            vm.warp(block.timestamp + REFUND_TIMEOUT + 1);
+            uint256 aliceBefore = usdt0.balanceOf(alice);
+            uint256 callerBefore = usdt0.balanceOf(callers[i]);
+            vm.prank(callers[i]);
+            gateway.claimRefund(q.orderId);
+            assertEq(usdt0.balanceOf(alice) - aliceBefore, _total(q), "payer refunded");
+            assertEq(usdt0.balanceOf(callers[i]), callerBefore, "caller gets nothing");
         }
     }
 
@@ -1922,7 +1940,7 @@ contract PayLightGatewayTest is Fixture {
         vm.expectRevert(PayLightGateway.InsufficientGasForTier.selector);
         gateway.computeTier{gas: 100_000}(alice);
         vm.expectRevert(PayLightGateway.InsufficientGasForTier.selector);
-        gateway.computeTier{gas: 520_000}(alice);
+        gateway.computeTier{gas: 260_000}(alice);
         assertEq(gateway.computeTier{gas: 700_000}(alice), 1);
     }
 
@@ -1934,13 +1952,13 @@ contract PayLightGatewayTest is Fixture {
         _approveAs(alice, address(gateway), _total(q));
         vm.prank(alice);
         vm.expectRevert(PayLightGateway.InsufficientGasForTier.selector);
-        gateway.pay{gas: 450_000}(q, sig);
+        gateway.pay{gas: 250_000}(q, sig);
 
         // a relayer cannot starve the tier lookup either
         PayLightGateway.AuthorizationSig memory a = _authSig(alicePk, alice, _total(q), q.orderId);
         vm.prank(relayer);
         vm.expectRevert(PayLightGateway.InsufficientGasForTier.selector);
-        gateway.payWithAuthorization{gas: 450_000}(q, sig, a);
+        gateway.payWithAuthorization{gas: 250_000}(q, sig, a);
 
         vm.prank(alice);
         gateway.pay{gas: 2_000_000}(q, sig);
@@ -1952,13 +1970,13 @@ contract PayLightGatewayTest is Fixture {
     ///      the guard must never let a starved (but honest) TapeOut call silently degrade to tier 0.
     function test_computeTier_gasGuard_neverReturnsStarvedResult() public {
         GwBadTransistors bt = new GwBadTransistors();
-        GwProcessorStub stub = new GwProcessorStub(address(bt), 290_000);
+        GwProcessorStub stub = new GwProcessorStub(address(bt), 140_000);
         PayLightGateway gw = _gatewayWith(address(usdt0), address(stub), 1);
         _settleOrdersOn(gw, bob, 3); // r = 1 -> tier 1 even when balances read 0
-        assertEq(gw.computeTier(bob), 1, "calibration: heavy eval fits in the 300k cap");
+        assertEq(gw.computeTier(bob), 1, "calibration: heavy eval fits in the 150k cap");
 
         // sensitivity check: an eval that needs more than the cap is starved and visibly degrades to tier 0
-        PayLightGateway gwTooHeavy = _gatewayWith(address(usdt0), address(new GwProcessorStub(address(bt), 300_000)), 1);
+        PayLightGateway gwTooHeavy = _gatewayWith(address(usdt0), address(new GwProcessorStub(address(bt), 150_000)), 1);
         bt.setBalance(bob, 0, 500);
         assertEq(gwTooHeavy.computeTier(bob), 0, "starved eval -> fallback");
         assertEq(gw.computeTier(bob), 2, "same holdings, eval within cap -> tier 2");
@@ -1969,7 +1987,7 @@ contract PayLightGatewayTest is Fixture {
 
         uint256 ok;
         uint256 guarded;
-        for (uint256 g = 480_000; g <= 640_000; g += 2_000) {
+        for (uint256 g = 220_000; g <= 380_000; g += 2_000) {
             vm.cool(address(gw));
             vm.cool(address(bt));
             vm.cool(address(stub));
@@ -2604,7 +2622,7 @@ contract PayLightGatewayTest is Fixture {
     /// forge-config: default.fuzz.runs = 128
     function testFuzz_pay_anyValidAmount(uint128 base, uint32 units) public {
         base = uint128(bound(base, 1, MAX_BASE_TIER0));
-        units = uint32(bound(units, 0, 50));
+        units = uint32(bound(units, 0, base / 250_000 < 50 ? base / 250_000 : 50));
         PayLightGateway.Quote memory q = _quote(alice, base, units);
         _pay(q);
         PayLightGateway.Order memory o = gateway.getOrder(q.orderId);

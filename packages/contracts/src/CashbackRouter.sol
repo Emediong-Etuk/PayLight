@@ -70,6 +70,8 @@ contract CashbackRouter is ICashbackRouter, IERC1155Receiver, AccessControl, Ree
     error WrongPayment(uint256 expected);
     error MintMismatch();
     error UnexpectedTransfer();
+    error TransferMismatch();
+    error CannotRescueTransistors();
 
     constructor(address gateway_, address transistors_, address admin, address keeper, uint256 maxReserveMint_) {
         if (gateway_ == address(0) || transistors_ == address(0) || admin == address(0)) revert ZeroAddress();
@@ -113,6 +115,8 @@ contract CashbackRouter is ICashbackRouter, IERC1155Receiver, AccessControl, Ree
             pendingUnits -= units;
             distributedUnits += units;
             try transistors.safeTransferFrom{gas: TRANSFER_GAS_LIMIT}(address(this), c.payer, NAND_ID, units, "") {
+                // Fail closed if an (upgraded) transistor contract reports success without moving the tokens.
+                if (transistors.balanceOf(address(this), NAND_ID) != available - units) revert TransferMismatch();
                 available -= units;
                 ++paid;
                 emit CashbackPaid(id, c.payer, units);
@@ -188,6 +192,7 @@ contract CashbackRouter is ICashbackRouter, IERC1155Receiver, AccessControl, Ree
     /// @notice Recover ERC-20 tokens sent here by mistake. Can't touch transistors (ERC-1155).
     function rescueERC20(address token, address to, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (to == address(0)) revert ZeroAddress();
+        if (token == address(transistors)) revert CannotRescueTransistors();
         IERC20(token).safeTransfer(to, amount);
         emit ERC20Rescued(token, to, amount);
     }

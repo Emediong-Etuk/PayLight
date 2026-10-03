@@ -89,7 +89,7 @@ USD₮0 supports `permit` (EIP-2612) and `receiveWithAuthorization` (EIP-3009), 
 
 ## D-06 · Fees are tier-based and enforced by the circuit · ACCEPTED (Greg, 2026-10-03)
 
-**Quote format.** The backend signs EIP-712 `Quote(orderId, payer, baseAmount, fee, tier, expiry)`.
+**Quote format.** The backend signs EIP-712 `Quote(bytes32 orderId,address payer,uint128 baseAmount,uint128 fee,uint8 tier,uint32 cashbackUnits,uint64 expiry)` (domain `PayLightGateway`, version `1`).
 
 **The gateway enforces:**
 - `tier == circuitTier(payer)`, via D-03 with its fallback. If not, it reverts with `TierChanged` and the UI re-quotes.

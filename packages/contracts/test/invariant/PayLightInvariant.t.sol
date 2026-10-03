@@ -63,6 +63,7 @@ contract PayLightHandler is Test {
     mapping(bytes32 => uint128) public ghostAmount;
     mapping(bytes32 => uint32) public ghostUnits;
     mapping(bytes32 => uint64) public ghostRefundableAt;
+    mapping(bytes32 => uint256) public ghostPaidDay;
     uint256 public ghostTotalPending;
     uint256 public ghostSettledVolume; // all USD₮0 ever sent to the treasury
     uint256 public ghostRefundedVolume;
@@ -88,6 +89,7 @@ contract PayLightHandler is Test {
     uint256 public nClaimed;
     uint256 public nClaimTooEarly;
     uint256 public nClaimNotPayer;
+    uint256 public nSettleAfterDeadline;
     uint256 public nTerminalTouches;
     uint256 public nPauses;
     uint256 public nUnpauses;
@@ -141,14 +143,14 @@ contract PayLightHandler is Test {
     function _payFlow(uint8 path, uint256 actorSeed, uint256 baseSeed, uint256 unitsSeed) internal {
         address payer = actors[actorSeed % actors.length];
         uint8 tier = gateway.computeTier(payer);
-        uint128 base = uint128(bound(baseSeed, 1, _maxBase(tier)));
+        uint128 base = uint128(_bound(baseSeed, 1, _maxBase(tier)));
         PayLightGateway.Quote memory q = PayLightGateway.Quote({
             orderId: keccak256(abi.encode("inv-order", ++_nonce)),
             payer: payer,
             baseAmount: base,
             fee: gateway.previewFee(base, tier),
             tier: tier,
-            cashbackUnits: uint32(bound(unitsSeed, 0, MAX_UNITS)),
+            cashbackUnits: uint32(_bound(unitsSeed, 0, base / 250_000 < MAX_UNITS ? base / 250_000 : MAX_UNITS)),
             expiry: uint64(block.timestamp) + QUOTE_TTL
         });
         uint128 amount = q.baseAmount + q.fee;
@@ -220,6 +222,7 @@ contract PayLightHandler is Test {
         uint256 day = block.timestamp / 1 days;
         if (ghostDailyVolume[day] == 0) _days.push(day);
         ghostDailyVolume[day] += amount;
+        ghostPaidDay[id] = day;
         ++nPaid;
 
         PayLightGateway.Order memory o = gateway.getOrder(id);
@@ -242,6 +245,16 @@ contract PayLightHandler is Test {
             vm.expectRevert(PayLightGateway.NotPaid.selector);
             vm.prank(operator);
             gateway.markFulfilled(id, receipt);
+            return;
+        }
+        if (block.timestamp > ghostRefundableAt[id]) {
+            // past the refund deadline the order can only be refunded, never settled
+            vm.expectRevert(
+                abi.encodeWithSelector(PayLightGateway.SettlementWindowClosed.selector, ghostRefundableAt[id])
+            );
+            vm.prank(operator);
+            gateway.markFulfilled(id, receipt);
+            ++nSettleAfterDeadline;
             return;
         }
         address payer = ghostPayer[id];
@@ -297,12 +310,10 @@ contract PayLightHandler is Test {
             return;
         }
         uint256 mode = modeSeed % 4;
+        address caller = payer;
         if (mode == 0) {
-            ++nClaimNotPayer;
-            vm.expectRevert(PayLightGateway.NotPayer.selector);
-            vm.prank(_otherActor(payer, modeSeed >> 8));
-            gateway.claimRefund(id);
-            return;
+            ++nClaimNotPayer; // a third party triggers; funds still go to the payer
+            caller = _otherActor(payer, modeSeed >> 8);
         }
         uint64 refundableAt = ghostRefundableAt[id]; // snapshot taken at payment time
         if (block.timestamp <= refundableAt) {
@@ -316,7 +327,7 @@ contract PayLightHandler is Test {
             _setTime(uint256(refundableAt) + 1 + ((modeSeed >> 16) % 1 hours));
         }
         _expectRefund(id, false);
-        vm.prank(payer);
+        vm.prank(caller);
         gateway.claimRefund(id);
         _afterRefund(id);
         ++nClaimed;
@@ -328,6 +339,7 @@ contract PayLightHandler is Test {
     }
 
     function _afterRefund(bytes32 id) internal {
+        ghostDailyVolume[ghostPaidDay[id]] -= ghostAmount[id]; // refunds release their day's volume
         _close(id, PayLightGateway.Status.Refunded);
         ghostRefundedVolume += ghostAmount[id];
     }
@@ -378,8 +390,9 @@ contract PayLightHandler is Test {
             vm.prank(admin);
             gateway.unpause();
             ++nUnpauses;
-        } else if (seed % 2 == 0) {
-            vm.prank(seed % 4 == 0 ? admin : operator);
+        } else if (seed % 4 == 1) {
+            // pause only on 1 in 4 toggles so most of each run is spent unpaused (payments are the interesting part)
+            vm.prank((seed >> 8) % 2 == 0 ? admin : operator);
             gateway.pause();
             ++nPauses;
         }
@@ -396,7 +409,7 @@ contract PayLightHandler is Test {
 
     /// @notice Admin changes the refund timeout; existing orders keep their snapshotted deadline (checked in claims).
     function setRefundTimeout(uint256 seed) external useTime {
-        uint64 t = uint64(bound(seed, gateway.MIN_REFUND_TIMEOUT(), gateway.MAX_REFUND_TIMEOUT()));
+        uint64 t = uint64(_bound(seed, gateway.MIN_REFUND_TIMEOUT(), gateway.MAX_REFUND_TIMEOUT()));
         vm.prank(admin);
         gateway.setRefundTimeout(t);
     }
@@ -411,7 +424,7 @@ contract PayLightHandler is Test {
             router.topUp{value: c1}(1);
             return;
         }
-        uint256 units = bound(unitsSeed, 0, remaining < 2_000 ? remaining : 2_000);
+        uint256 units = _bound(unitsSeed, 0, remaining < 2_000 ? remaining : 2_000);
         uint256 cost = router.topUpCost(units);
         vm.deal(keeper, cost + 1);
         if (unitsSeed % 11 == 0) {
@@ -432,7 +445,7 @@ contract PayLightHandler is Test {
     /// @notice Anyone distributes a random batch (credited, uncredited and unknown ids, possibly duplicated). The handler
     ///         predicts exactly which credits get paid and checks the return value and every actor's NAND balance.
     function distribute(uint256 seed, uint256 lenSeed, uint256 callerSeed) external useTime {
-        bytes32[] memory ids = _buildBatch(seed, bound(lenSeed, 1, 6));
+        bytes32[] memory ids = _buildBatch(seed, _bound(lenSeed, 1, 6));
         uint256 n = actors.length;
         uint256[] memory nandBefore = new uint256[](n);
         uint256[] memory delta = new uint256[](n);
@@ -482,7 +495,7 @@ contract PayLightHandler is Test {
     /// @notice Actors buy transistors (NAND or LATCH), which moves them across fee tiers.
     function buyTransistors(uint256 actorSeed, uint256 amountSeed, bool latch) external useTime {
         address a = actors[actorSeed % actors.length];
-        uint256 amount = bound(amountSeed, 1, 300);
+        uint256 amount = _bound(amountSeed, 1, 300);
         uint256 cost = transistors.mintPrice() * amount + transistors.protocolFee();
         vm.deal(a, cost);
         vm.prank(a);
@@ -496,7 +509,7 @@ contract PayLightHandler is Test {
     }
 
     function warp(uint256 dt) external useTime {
-        _setTime(currentTime + bound(dt, 1, 3 days));
+        _setTime(currentTime + _bound(dt, 1, 3 days));
     }
 
     /// @notice Role checks: a random actor (no roles) can't settle, refund, retry, top up, pause, unpause or credit.
@@ -747,6 +760,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── 1. solvency
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_gatewaySolvent() public view {
         assertGe(usdt0.balanceOf(address(gateway)), gateway.totalPending(), "balanceOf(gateway) >= totalPending");
         // nobody can donate in this model, so the escrow holds exactly the pending amount
@@ -756,6 +771,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── 2. pending accounting
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_totalPendingIsSumOfPaidOrders() public view {
         uint256 sumOnChain;
         uint256 sumGhost;
@@ -779,6 +796,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── 3. terminal states are final
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_terminalStatesAreFinal() public view {
         uint256 n = handler.ordersLength();
         for (uint256 i; i < n; ++i) {
@@ -799,6 +818,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── 4. USD₮0 conservation
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_usdt0Conserved() public view {
         uint256 sum = usdt0.balanceOf(address(gateway)) + usdt0.balanceOf(treasury);
         for (uint256 i; i < actorList.length; ++i) {
@@ -813,6 +834,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── 5. reserve accounting
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_routerReserveAccounting() public view {
         assertEq(
             transistors.balanceOf(address(router), 0),
@@ -827,6 +850,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── 6. reserve bounds
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_routerReserveBounds() public view {
         assertLe(router.distributedUnits(), router.reserveMinted(), "distributed <= minted");
         assertLe(router.reserveMinted(), router.maxReserveMint(), "minted <= maxReserveMint");
@@ -836,6 +861,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── 7. pending units
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_routerPendingUnitsMatchGhost() public view {
         uint256 unpaid;
         uint256 n = handler.creditedLength();
@@ -852,6 +879,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── 8. credited => fulfilled
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_creditedOrdersAreFulfilled() public view {
         uint256 n = handler.creditedLength();
         for (uint256 i; i < n; ++i) {
@@ -877,6 +906,8 @@ contract PayLightInvariantTest is Fixture {
     // ─────────────────────────────────────────────────────────────── extra: daily volume
 
     /// forge-config: default.invariant.fail-on-revert = true
+    /// forge-config: default.invariant.runs = 128
+    /// forge-config: default.invariant.depth = 128
     function invariant_dailyVolumeTrackedAndCapped() public view {
         uint256 n = handler.daysLength();
         for (uint256 i; i < n; ++i) {
@@ -947,9 +978,8 @@ contract PayLightInvariantTest is Fixture {
         assertEq(handler.nFulfilled(), 2, "fulfilled");
         handler.refund(1);
         assertEq(handler.nRefunded(), 1, "refunded");
-        handler.claimRefund(1, 0); // non-payer
         handler.claimRefund(1, 1); // too early
-        handler.claimRefund(1, 2); // warp + claim
+        handler.claimRefund(1, 0); // a third party triggers after the deadline; funds go to the payer
         assertEq(handler.nClaimNotPayer(), 1);
         assertEq(handler.nClaimTooEarly(), 1);
         assertEq(handler.nClaimed(), 1);
@@ -968,12 +998,12 @@ contract PayLightInvariantTest is Fixture {
         handler.distribute(2, 6, 1);
         assertGt(handler.nCashbackPaid(), 0, "cashback paid");
 
-        handler.togglePause(2); // pause by operator
+        handler.togglePause(257); // pause by operator (257 % 4 == 1, (257 >> 8) odd)
         assertTrue(gateway.paused());
         handler.pay(1, 5e6, 1); // rejected while paused
         assertEq(handler.nPayRejectedPaused(), 1);
         handler.togglePause(0); // operator can't unpause
-        handler.togglePause(1); // admin unpauses
+        handler.togglePause(3); // admin unpauses
         assertFalse(gateway.paused());
 
         handler.buyTransistors(2, 300, false);

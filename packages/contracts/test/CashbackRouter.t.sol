@@ -1333,7 +1333,7 @@ contract CashbackRouterTest is Fixture {
         (bool ok, bytes memory ret) =
             address(router).call(abi.encodeCall(CashbackRouter.rescueERC20, (address(transistors), admin, 1)));
         assertFalse(ok);
-        assertEq(ret.length, 0);
+        assertEq(bytes4(ret), CashbackRouter.CannotRescueTransistors.selector);
         assertEq(_nand(address(router)), 100);
         assertEq(_nand(admin), 0);
     }

@@ -6,7 +6,7 @@ Rule 4 of the brief says that where the docs contradict the brief, the docs win 
 
 ---
 
-## D-01 · Plan for the real deadline: 2026-10-09 04:00 UTC · PROPOSED
+## D-01 · Plan for the real deadline: 2026-10-09 04:00 UTC · ACCEPTED (Greg, 2026-10-03)
 
 The window closes Friday 9 Oct, 05:00 Lagos time. Today is Saturday 3 Oct. That leaves about 3½ business days for VTpass approval, which is the slowest dependency.
 
@@ -28,7 +28,7 @@ To fit this, the MUST list in brief §15 is trimmed:
 
 Dropping Slither as a gate means relaxing brief §5.4. **This needs Greg's explicit OK.** Fork tests, fuzz tests and invariant tests stay mandatory.
 
-## D-02 · The "asset" is the TapeOut processor's transistors, not an IGNIX ERC-20 · PROPOSED
+## D-02 · The "asset" is the TapeOut processor's transistors, not an IGNIX ERC-20 · ACCEPTED (Greg, 2026-10-03)
 
 **Context.** The brief assumed $LIGHT is an ERC-20 launched on an IGNIX bonding curve with a USD₮0 quote, and that cashback buys it. In reality a TapeOut processor issues **ERC-1155 transistors (NAND id 0, LATCH id 1)**:
 - They're sold at a **fixed price in native OKB** up to a **fixed `supplyCap`**.
@@ -45,7 +45,7 @@ Dropping Slither as a gate means relaxing brief §5.4. **This needs Greg's expli
 - There's no secondary-market buying by any protocol wallet, ever. Cashback is primary issuance (D-05).
 - Holder utility stays the same in spirit: **fee tiers** (D-06), plus the transistors are building blocks people can use to tape out their own circuits on our processor.
 
-## D-03 · How the circuit requirement is satisfied · PROPOSED
+## D-03 · How the circuit requirement is satisfied · ACCEPTED (Greg, 2026-10-03)
 
 **Context.** A circuit is a NAND/LATCH netlist minted as an ERC-721 by `processor.tapeout(...)`, burning transistors. A circuit can't be an arbitrary contract, so the brief's "gateway/router is the circuit" idea isn't possible. Circuits can be evaluated on-chain through `processor.eval(id, bits)`, a `view` call that cost about 55k gas for 4 gates on the fork.
 
@@ -61,14 +61,14 @@ Dropping Slither as a gate means relaxing brief §5.4. **This needs Greg's expli
 - **Why this one:** it's the smallest circuit that's genuinely *used* on every payment, it's verifiable by judges from events, and it makes the processor "real and used".
 - **Stretch:** encourage customers to tape out their own circuits using cashback transistors (e.g. a simple "light switch" tutorial on `/light`).
 
-## D-04 · Payment paths · PROPOSED
+## D-04 · Payment paths · ACCEPTED (permit is SHOULD; gasless EIP-3009 is SHOULD, built if time allows)
 
 USD₮0 supports `permit` (EIP-2612) and `receiveWithAuthorization` (EIP-3009), both verified on-chain. The gateway will expose:
 1. **`pay(...)`**: classic approve + pay (2 transactions). Always available.
 2. **`payWithPermit(...)`**: permit signature + 1 transaction. The `permit` is wrapped in try/catch with an allowance check, to resist front-run griefing. This is SHOULD, upgraded from the brief's "only if supported", because it *is* supported.
 3. **`payWithAuthorization(...)`**: **gasless for the user**. The user signs an EIP-3009 `ReceiveWithAuthorization(from=payer, to=gateway, value=amount, validAfter, validBefore, nonce=orderId)`. Our operator relays it and pays the gas (about 0.02 gwei × ~250k gas, which is negligible). Using `nonce = orderId` binds the authorization to exactly one order. **SHOULD**, and a strong UX and judging point: "no OKB needed". If it ships, `/help` no longer needs the "get some OKB" step.
 
-## D-05 · Cashback = transistors from an on-chain reserve; no swaps, no market buys · PROPOSED
+## D-05 · Cashback = transistors from an on-chain reserve; no swaps, no market buys · ACCEPTED (Greg, 2026-10-03)
 
 **Context.** Transistors are minted with native OKB, while fees arrive in USD₮0. The brief's design (send a USD₮0 fee share to the router, which buys the asset) would need a USD₮0→OKB swap on every batch. I haven't verified any DEX router on X Layer, and a swap adds slippage, MEV and failure modes.
 
@@ -87,7 +87,7 @@ USD₮0 supports `permit` (EIP-2612) and `receiveWithAuthorization` (EIP-3009), 
 - (b) An on-chain USD₮0→OKB swap: unverified router, plus extra risk.
 - (c) Buying on a secondary market: wash-trading optics.
 
-## D-06 · Fees are tier-based and enforced by the circuit · PROPOSED
+## D-06 · Fees are tier-based and enforced by the circuit · ACCEPTED (Greg, 2026-10-03)
 
 **Quote format.** The backend signs EIP-712 `Quote(orderId, payer, baseAmount, fee, tier, expiry)`.
 
@@ -98,7 +98,7 @@ USD₮0 supports `permit` (EIP-2612) and `receiveWithAuthorization` (EIP-3009), 
 
 **Brief vs proposal:** the brief let the signer choose any fee. The proposal moves fee logic on-chain, which is safer and makes the circuit load-bearing.
 
-## D-07 · Confirmations before vending · PROPOSED
+## D-07 · Confirmations before vending · ACCEPTED (Greg, 2026-10-03)
 
 - **Vend after 3 blocks on `latest`** (about 3 s on X Layer's 1 s blocks), with a small per-order pilot cap.
 - The reconciler re-verifies each order against the **`safe`** head (~4 min behind) and alerts on any mismatch. Accounting is final at `finalized` (~19 min).
@@ -117,7 +117,7 @@ Neither the TapeOut factory nor USD₮0 exists on testnet (chainId 1952); `getCo
   - Cashback distribution failing never blocks settlement or refunds (credits accumulate and can be distributed later).
 - `refund` and `claimRefund` never touch TapeOut.
 
-## D-10 · All VTpass calls run from a static-IP backend · PROPOSED
+## D-10 · All VTpass calls run from a static-IP backend · ACCEPTED (Greg, 2026-10-03)
 
 VTpass live may require **IP whitelisting** (error 027). Vercel serverless egress IPs aren't static. **Proposal:** host both the Next.js app and the worker on one platform with a static outbound IP (Railway with static IP, or Fly.io with an egress IP), or have Vercel call the worker's internal HTTP endpoint for verify and quote. Greg picks the hosting. Default if he doesn't choose: Railway for web, worker and Postgres.
 
@@ -128,7 +128,7 @@ The public RPC caps `eth_getLogs` at **100 blocks** and requests at 100/s per IP
 - track a cursor per contract;
 - also accept a dedicated RPC URL (`RPC_URL`) when Greg provides one (e.g. QuickNode, Alchemy, ZAN, Chainstack, BlockPI, all listed by X Layer).
 
-## D-12 · Names · PROPOSED
+## D-12 · Names · ACCEPTED (Greg, 2026-10-03)
 
 - Processor name **"PayLight"**, symbol **"PLIGHT"**. LIGHT is taken on IGNIX by an unrelated token; TapeOut doesn't enforce uniqueness, but confusion hurts.
 - Alternatives: WATT, PYLT, NEPA.

@@ -11,3 +11,10 @@
 - Wrote `RESEARCH.md`, `DECISIONS.md`, `PROCESSOR_PARAMS.md`, `GREG_ACTIONS.md` and `SOURCES.md`. Saved the brief as `BUILD_BRIEF.md`.
 - No application code yet (Phase 0 rule). No mainnet transactions. No secrets.
 - **→ CHECKPOINT 0: waiting for Greg.**
+
+## 2026-10-03 (Sat) — Checkpoint 0 approved
+
+- Greg approved the redesign and the full parameter sheet (PayLight / PLIGHT, cap 1,000,000, 0.0001 OKB, fee tiers 1% / 0.5% / 0.25%, pilot caps 30 / 1,000 USD₮0).
+- Also approved: trimmed test gates (Slither and Playwright don't gate launch; fork, fuzz and invariant tests are mandatory), vend after 3 blocks, hosting on Railway.
+- Greg reports that the urgent owner actions are done (VTpass, IGNIX question, wallets, funding). Waiting on: public addresses, the IGNIX reply, and VTpass live status. Secrets go to environment variables, never chat.
+- Starting Phase 1 (contracts).

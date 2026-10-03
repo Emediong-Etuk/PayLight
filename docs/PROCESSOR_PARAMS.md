@@ -1,6 +1,6 @@
-# PayLight Processor — Proposed Parameter Sheet (for Greg's approval)
+# PayLight Processor — Parameter Sheet (APPROVED)
 
-_Proposed 2026-10-03. **Nothing here is deployed.** Every value is set once, at `createCPU`, and published in three places: the deployment tx, the `/light` page and a pinned X post. Background is in [`RESEARCH.md`](RESEARCH.md) §1 and [`DECISIONS.md`](DECISIONS.md) D-02, D-03, D-05, D-06._
+_**APPROVED by Greg 2026-10-03.** Nothing here is deployed yet. Every value is set once, at `createCPU`, and published in three places: the deployment tx, the `/light` page and a pinned X post. Background is in [`RESEARCH.md`](RESEARCH.md) §1 and [`DECISIONS.md`](DECISIONS.md) D-02, D-03, D-05, D-06._
 
 ## 1. On-chain processor parameters (TapeOut factory `createCPU`)
 

@@ -1,0 +1,34 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc_version = "0.8.28"
+evm_version = "cancun"          # X Layer mainnet supports TLOAD/MCOPY/BLOBBASEFEE (probed 2026-10-03); CLZ (osaka) is NOT active
+optimizer = true
+optimizer_runs = 10000
+bytecode_hash = "none"
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
+fs_permissions = [{ access = "read-write", path = "../../deployments" }]
+
+[fuzz]
+runs = 1000
+
+[invariant]
+runs = 256
+depth = 64
+fail_on_revert = false
+
+[rpc_endpoints]
+xlayer = "https://rpc.xlayer.tech"
+
+[fmt]
+line_length = 120
+
+[lint]
+# Public immutables keep camelCase so the ABI reads naturally (gateway(), transistors(), …); TapeOut's own ABI uses NAND()/LATCH().
+exclude_lints = ["screaming-snake-case-immutable", "mixed-case-function"]

@@ -13,3 +13,5 @@ cache/
 broadcast/*/31337/
 coverage/
 .DS_Store
+packages/contracts/out/
+packages/contracts/cache/

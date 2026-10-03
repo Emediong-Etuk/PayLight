@@ -1,0 +1,15 @@
+# secrets — only .env.example is ever committed
+.env
+.env.*
+!.env.example
+*.keystore
+keystore/
+# build / deps
+node_modules/
+.next/
+dist/
+out/
+cache/
+broadcast/*/31337/
+coverage/
+.DS_Store

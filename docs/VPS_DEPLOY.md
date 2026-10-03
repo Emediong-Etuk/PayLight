@@ -32,6 +32,20 @@ When you create the server:
 - **Auth:** add your **SSH key**, not a password. If you don't have a key, run `ssh-keygen -t ed25519` on your laptop and paste in the contents of `~/.ssh/id_ed25519.pub`.
 - Note the server's **public IPv4** (example used below: `203.0.113.7`).
 
+**On Vultr** (recommended: it accepts card, PayPal or crypto via BitPay; see [Vultr's provisioning guide](https://docs.vultr.com/products/compute/cloud-compute/provisioning)):
+1. Sign up at vultr.com and add credit (**Billing**).
+2. Add your SSH key: **Account → SSH Keys → Add SSH Key**. Paste the contents of `~/.ssh/id_ed25519.pub`.
+3. **Products → Compute → Deploy**, then choose:
+   - **Type:** Cloud Compute – Shared CPU.
+   - **Location:** Johannesburg (closest to Lagos), or London or Frankfurt.
+   - **Image:** Ubuntu 24.04 LTS x64.
+   - **Plan:** Regular Performance with **2 GB RAM**.
+4. Server settings:
+   - **SSH Keys:** tick your key.
+   - **Auto Backups:** optional, about 20% extra.
+   - **Hostname:** `paylight`.
+5. Click **Deploy Now**. After about a minute the instance page shows the **IP Address**.
+
 ## 2. Prepare the server (≈5 min)
 
 From your laptop:
@@ -51,8 +65,10 @@ curl -fsSL https://get.docker.com | sh
 docker compose version          # should print v2 or newer
 
 # 2 GB swap, so the Next.js build can't run out of memory
-fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
+if ! swapon --show | grep -q .; then
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
 ```
 
 Only ports 22, 80 and 443 are open. Postgres, web and worker are reachable only inside Docker's private network.

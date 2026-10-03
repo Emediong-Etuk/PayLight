@@ -149,10 +149,7 @@ contract RtBouncePayer is IERC1155Receiver {
         router = router_;
     }
 
-    function onERC1155Received(address, address, uint256 id, uint256 value, bytes calldata)
-        external
-        returns (bytes4)
-    {
+    function onERC1155Received(address, address, uint256 id, uint256 value, bytes calldata) external returns (bytes4) {
         IERC1155(msg.sender).safeTransferFrom(address(this), router, id, value, "");
         return IERC1155Receiver.onERC1155Received.selector;
     }
@@ -180,5 +177,53 @@ contract RtFalseERC20 {
 
     function transfer(address, uint256) external pure returns (bool) {
         return false;
+    }
+}
+
+/// @dev Hook reverts with a large blob of revert data (returndata bomb).
+contract RtRevertBombPayer is IERC1155Receiver {
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+        assembly {
+            revert(0, 100000)
+        }
+    }
+
+    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
+        external
+        pure
+        returns (bytes4)
+    {
+        return IERC1155Receiver.onERC1155BatchReceived.selector;
+    }
+
+    function supportsInterface(bytes4 id) external pure returns (bool) {
+        return id == type(IERC1155Receiver).interfaceId || id == 0x01ffc9a7;
+    }
+}
+
+/// @dev A legitimate but gas-hungry receiver (e.g. a smart wallet that books every receipt): ~5 fresh SSTOREs.
+contract RtHeavyPayer is IERC1155Receiver {
+    mapping(uint256 => uint256) public book;
+    uint256 public receipts;
+
+    function onERC1155Received(address, address, uint256, uint256 value, bytes calldata) external returns (bytes4) {
+        uint256 base = receipts * 8;
+        for (uint256 i; i < 4; ++i) {
+            book[base + i] = value + i + 1;
+        }
+        receipts += 1;
+        return IERC1155Receiver.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
+        external
+        pure
+        returns (bytes4)
+    {
+        return IERC1155Receiver.onERC1155BatchReceived.selector;
+    }
+
+    function supportsInterface(bytes4 id) external pure returns (bool) {
+        return id == type(IERC1155Receiver).interfaceId || id == 0x01ffc9a7;
     }
 }

@@ -13,7 +13,7 @@ Ordered by urgency. The deadline is **Fri 2026-10-09 04:00 UTC (05:00 WAT)**. Ai
      - (c) tell you whether **IP whitelisting** applies (error 027). If it does, we'll send our server's static IP Monday;
      - (d) tell you **how long approval takes and what documents they need**.
    - Plan to fund the live VTpass wallet with a naira float for the pilot (suggest ₦30,000–₦50,000).
-2. **Ask the IGNIX team** in https://t.me/IGNIXOfficial. I couldn't find these in any official doc:
+2. ~~**Ask the IGNIX team**~~ (no reply; Greg decided to proceed with the on-chain-verified factory, DECISIONS D-14). Original questions, kept for reference: I couldn't find these in any official doc:
    - (a) Is `0x1f09daefa827f02cbb40967cc91b259763760761` the official TapeOut factory on X Layer for this hackathon?
    - (b) Does a processor created by calling the factory directly (script, no UI) count? Is there an official X Layer TapeOut UI?
    - (c) Does "any cap" in the rules mean anything beyond `supplyCap`?

@@ -4,7 +4,7 @@ These are the exact commands for Greg to run **on his own computer** from the **
 
 The parameters are the approved values from [`PROCESSOR_PARAMS.md`](PROCESSOR_PARAMS.md). Every command below was dry-run verbatim on an Anvil fork of X Layer mainnet on 2026-10-03: createCPU, mint and tapeout all succeeded; eval returned `00 01 02 02 01 01 02 02`; total spend was 0.00928 OKB, of which 0.0007 OKB is owed back to the creator.
 
-> ⚠️ Before Step 1, make sure the IGNIX team has confirmed that `0x1f09daefa827f02cbb40967cc91b259763760761` is the official TapeOut factory for the hackathon ([`GREG_ACTIONS.md`](GREG_ACTIONS.md) item 2).
+> ℹ️ The IGNIX team hadn't confirmed the factory address. Greg decided to proceed with it on 2026-10-03, based on on-chain evidence ([`DECISIONS.md`](DECISIONS.md) D-14).
 >
 > Each step costs real OKB. Total ≈ 0.0066 + 0.00136 + 0.0013 ≈ **0.0093 OKB** plus negligible gas. The 0.0007 OKB mint price comes back to you as the processor creator.
 

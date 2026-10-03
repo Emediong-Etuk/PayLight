@@ -140,6 +140,19 @@ These features only apply to IGNIX launchpad tokens linked to OKX Agents. They d
 
 ---
 
+## D-14 · Use TapeOut factory 0x1f09…0761 without an IGNIX reply · ACCEPTED (Greg, 2026-10-03)
+
+The IGNIX team hasn't replied to the request to confirm the factory. Greg chose to proceed with `0x1f09daefa827f02cbb40967cc91b259763760761`. Evidence:
+- It's the only TapeOut factory deployed on X Layer.
+- It holds 272 processors, and processor #0 was created by TapeOut's own protocol wallet.
+- Its owner is a 3-of-5 Safe that includes that wallet.
+- TapeKit's config lists it.
+- The full lifecycle works on a fork.
+
+Residual risk: IGNIX could later name a different factory. Cost of being wrong: about 0.0093 OKB and a redeploy.
+
+---
+
 ## Conflicts between the brief and the docs (rule 4 log)
 
 | Brief section | Brief says | Docs / chain say | Resolution |
